@@ -306,7 +306,7 @@ if check_password():
                             st.rerun()
 
                     st.divider()
-                    st.markdown(### f"Total a Pagar: ${total_general:.2f}")
+                    st.markdown(f"### Total a Pagar: ${total_general:.2f}")
 
                     col_c1, col_c2 = st.columns(2)
                     if col_c1.button("✅ Confirmar Venta Total"):
