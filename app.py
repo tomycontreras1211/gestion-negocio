@@ -4,11 +4,10 @@ from firebase_admin import credentials, firestore
 from streamlit_qrcode_scanner import qrcode_scanner
 import json
 
-# --- CONFIGURACIÓN DE SEGURIDAD (CONSEGUIR PASSWORD) ---
-PASSWORD_CORRECTA = "1211" # Cambia esto por la clave que quieras usar
+# --- CONFIGURACIÓN DE SEGURIDAD ---
+PASSWORD_CORRECTA = "1211"  # Cámbiala por tu contraseña
 
 def check_password():
-    """Devuelve True si el usuario ingresó la contraseña correcta."""
     if "password_correcta" not in st.session_state:
         st.session_state.password_correcta = False
         
@@ -26,7 +25,6 @@ def check_password():
 # --- INICIO DE LA APP ---
 if check_password():
     if not firebase_admin._apps:
-        # Convertimos el string de los secretos en un diccionario JSON real
         firebase_credentials = json.loads(st.secrets["FIREBASE_CONFIG"])
         cred = credentials.Certificate(firebase_credentials)
         firebase_admin.initialize_app(cred)
@@ -54,74 +52,70 @@ if check_password():
             lista.append({"id": c.id, "nombre": data.get("nombre")})
         return sorted(lista, key=lambda x: x["nombre"])
 
-    # --- BARRA LATERAL: GESTIÓN RÁPIDA (Izquierda) ---
-    with st.sidebar:
-        st.header("➕ Agregar Producto")
-        
-        # Escáner opcional para el código de barras al cargar
-        usar_escaner_carga = st.checkbox("📷 Usar cámara para escanear código")
-        codigo_detectado_carga = ""
-        
-        if usar_escaner_carga:
-            st.write("Apunta al código del producto nuevo:")
-            codigo_detectado_carga = qrcode_scanner(key="scanner_carga")
-            if codigo_detectado_carga:
-                st.success(f"¡Código leído: {codigo_detectado_carga}!")
-
-        # El campo de texto se llena solo si se escanea, o se puede escribir a mano
-        codigo_nuevo = st.text_input("Código de barras", value=codigo_detectado_carga if codigo_detectado_carga else "")
-        
-        nombre_nuevo = st.text_input("Nombre del producto")
-        cat_nueva = st.selectbox("Categoría", obtener_categorias(), key="cat_sidebar")
-        precio_nuevo = st.number_input("Precio ($)", min_value=0.0, format="%.2f")
-        stock_nuevo = st.number_input("Stock inicial", min_value=0, step=1)
-        
-        if st.button("Guardar Producto"):
-            if nombre_nuevo:
-                db.collection("productos").add({
-                    "nombre": nombre_nuevo, 
-                    "codigo": codigo_nuevo.strip(),
-                    "categoria": cat_nueva, 
-                    "precio": precio_nuevo, 
-                    "stock": stock_nuevo
-                })
-                st.success("¡Producto guardado!")
-                st.rerun()
-            else:
-                st.error("Ingresa un nombre.")
-
-        st.divider()
-
-        st.header("⚙️ Gestión de Categorías")
-        
-        with st.expander("➕ Nueva Categoría"):
-            nueva_cat = st.text_input("Nombre de categoría", key="input_nueva_cat")
-            if st.button("Guardar Categoría"):
-                if nueva_cat:
-                    cats_actuales = [c.lower() for c in obtener_categorias()]
-                    if nueva_cat.strip().lower() in cats_actuales:
-                        st.warning("Esa categoría ya existe.")
-                    else:
-                        db.collection("categorias").add({"nombre": nueva_cat.strip()})
-                        st.success("¡Categoría guardada!")
-                        st.rerun()
-
-        with st.expander("🗑️ Borrar Categorías"):
-            cats_existentes = obtener_categorias_con_id()
-            if cats_existentes:
-                for cat in cats_existentes:
-                    col_c1, col_c2 = st.columns([2, 1])
-                    col_c1.write(cat["nombre"])
-                    if col_c2.button("Borrar", key=f"del_cat_{cat['id']}"):
-                        db.collection("categorias").document(cat["id"]).delete()
-                        st.success("Categoría borrada")
-                        st.rerun()
-            else:
-                st.info("No hay categorías creadas.")
-
-    # --- TAB 1: PRODUCTOS (Inventario Principal) ---
+    # --- TAB 1: PRODUCTOS (Inventario y Carga aquí adentro) ---
     with tab1:
         st.header("Inventario de Productos")
+
+        # Botón para agregar productos de forma limpia dentro de la pestaña
+        with st.expander("➕ Agregar Nuevo Producto o Categoría"):
+            col_nc1, col_nc2 = st.columns(2)
+            
+            with col_nc1:
+                st.subheader("Nuevo Producto")
+                usar_escaner_carga = st.checkbox("📷 Usar cámara para escanear código")
+                codigo_detectado_carga = ""
+                
+                if usar_escaner_carga:
+                    codigo_detectado_carga = qrcode_scanner(key="scanner_carga")
+                    if codigo_detectado_carga:
+                        st.success(f"¡Código leído: {codigo_detectado_carga}!")
+
+                codigo_nuevo = st.text_input("Código de barras", value=codigo_detectado_carga if codigo_detectado_carga else "", key="input_cod_nuevo")
+                nombre_nuevo = st.text_input("Nombre del producto", key="input_nom_nuevo")
+                cat_nueva = st.selectbox("Categoría", obtener_categorias(), key="cat_prod_nuevo")
+                precio_nuevo = st.number_input("Precio ($)", min_value=0.0, format="%.2f", key="precio_prod_nuevo")
+                stock_nuevo = st.number_input("Stock inicial", min_value=0, step=1, key="stock_prod_nuevo")
+                
+                if st.button("Guardar Producto"):
+                    if nombre_nuevo:
+                        db.collection("productos").add({
+                            "nombre": nombre_nuevo, 
+                            "codigo": codigo_nuevo.strip(),
+                            "categoria": cat_nueva, 
+                            "precio": precio_nuevo, 
+                            "stock": stock_nuevo
+                        })
+                        st.success("¡Producto guardado!")
+                        st.rerun()
+                    else:
+                        st.error("Ingresa un nombre.")
+
+            with col_nc2:
+                st.subheader("Gestión de Categorías")
+                nueva_cat = st.text_input("Nombre de categoría", key="input_nueva_cat_tab")
+                if st.button("Guardar Categoría"):
+                    if nueva_cat:
+                        cats_actuales = [c.lower() for c in obtener_categorias()]
+                        if nueva_cat.strip().lower() in cats_actuales:
+                            st.warning("Esa categoría ya existe.")
+                        else:
+                            db.collection("categorias").add({"nombre": nueva_cat.strip()})
+                            st.success("¡Categoría guardada!")
+                            st.rerun()
+
+                st.write("---")
+                st.write("Categorías existentes:")
+                cats_existentes = obtener_categorias_con_id()
+                if cats_existentes:
+                    for cat in cats_existentes:
+                        col_c1, col_c2 = st.columns([2, 1])
+                        col_c1.write(cat["nombre"])
+                        if col_c2.button("Borrar", key=f"del_cat_{cat['id']}"):
+                            db.collection("categorias").document(cat["id"]).delete()
+                            st.success("Categoría borrada")
+                            st.rerun()
+
+        st.divider()
         
         col_b1, col_b2 = st.columns(2)
         busqueda = col_b1.text_input("🔍 Buscar por nombre o código")
@@ -165,9 +159,9 @@ if check_password():
         else:
             st.info("No hay productos cargados o que coincidan con la búsqueda.")
 
-    # --- TAB 2: VENTAS (Con Escáner de Cámara) ---
+    # --- TAB 2: VENTAS ---
     with tab2:
-        st.header("Registrar Venta con Cámara")
+        st.header("Registrar Venta")
         
         st.write("Apunta con la cámara del celular al código de barras del producto:")
         codigo_escaneado = qrcode_scanner(key="scanner_ventas")
@@ -187,7 +181,7 @@ if check_password():
                     break
             
             if not producto_encontrado_data:
-                st.warning("El código fue leído, pero no está asociado a ningún producto cargado. Agrégalo en el inventario.")
+                st.warning("El código fue leído, pero no está asociado a ningún producto cargado.")
 
         if producto_encontrado_data:
             st.info(f"**Producto:** {producto_encontrado_data['nombre']} | **Precio:** ${producto_encontrado_data.get('precio', 0)} | **Stock actual:** {producto_encontrado_data.get('stock', 0)}")
@@ -203,20 +197,31 @@ if check_password():
         
         st.write("---")
         st.subheader("O seleccionar manualmente:")
+        
         if productos_dict:
-            seleccion = st.selectbox("Seleccionar producto", [f"{d['nombre']} (${d.get('precio', 0)}) - Stock: {d.get('stock', 0)}" for p_id, d in productos_dict.items()])
-            cant_vender_man = st.number_input("Cantidad", min_value=1, step=1, key="cant_manual")
+            # Creamos una lista limpia de opciones para el selectbox
+            opciones_productos = []
+            mapa_opciones = {}
+            for p_id, d in productos_dict.items():
+                texto_opcion = f"{d['nombre']} (${d.get('precio', 0)}) - Stock: {d.get('stock', 0)}"
+                opciones_productos.append(texto_opcion)
+                mapa_opciones[texto_opcion] = p_id
+            
+            seleccion = st.selectbox("Seleccionar producto", opciones_productos, key="select_manual_venta")
+            cant_vender_man = st.number_input("Cantidad", min_value=1, step=1, key="cant_manual", value=1)
             
             if st.button("Confirmar Venta Manual"):
-                p_id = [pid for pid, d in productos_dict.items() if f"{d['nombre']} (${d.get('precio', 0)}) - Stock: {d.get('stock', 0)}" == seleccion][0]
-                data = productos_dict[p_id]
+                p_id_elegido = mapa_opciones[seleccion]
+                data = productos_dict[p_id_elegido]
                 stock_actual = int(data.get('stock', 0))
                 
                 if stock_actual >= cant_vender_man:
-                    db.collection("productos").document(p_id).update({"stock": stock_actual - cant_vender_man})
+                    db.collection("productos").document(p_id_elegido).update({"stock": stock_actual - cant_vender_man})
                     st.success(f"¡Venta registrada! Stock restante: {stock_actual - cant_vender_man}")
                 else:
                     st.error("¡No hay suficiente stock disponible!")
+        else:
+            st.info("No hay productos cargados en el inventario para seleccionar.")
 
     # --- TAB 3: HISTORIAL / REPORTES ---
     with tab3:
