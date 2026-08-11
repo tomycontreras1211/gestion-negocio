@@ -31,7 +31,7 @@ if check_password():
 
     db = firestore.client()
 
-    st.title("🛒 Gestión Comercial")
+    st.title("🛒 Negocio Familiar - Gestión Integral")
 
     # Pestañas principales
     tab1, tab2, tab3 = st.tabs(["📦 Productos", "💰 Ventas", "📊 Historial / Reportes"])
@@ -41,7 +41,7 @@ if check_password():
         cat_ref = db.collection("categorias").stream()
         lista = sorted([c.to_dict().get("nombre") for c in cat_ref])
         if not lista:
-            lista = ["Bebidas", "Lácteos", "Almacén", "Limpieza"]
+            lista = ["Bebidas", "Lácteos", "Almacén", "Limpieza", "Panadería"]
         return lista
 
     def obtener_categorias_con_id():
@@ -52,11 +52,10 @@ if check_password():
             lista.append({"id": c.id, "nombre": data.get("nombre")})
         return sorted(lista, key=lambda x: x["nombre"])
 
-    # --- TAB 1: PRODUCTOS (Inventario y Carga aquí adentro) ---
+    # --- TAB 1: PRODUCTOS ---
     with tab1:
         st.header("Inventario de Productos")
 
-        # Botón para agregar productos de forma limpia dentro de la pestaña
         with st.expander("➕ Agregar Nuevo Producto o Categoría"):
             col_nc1, col_nc2 = st.columns(2)
             
@@ -73,8 +72,8 @@ if check_password():
                 codigo_nuevo = st.text_input("Código de barras", value=codigo_detectado_carga if codigo_detectado_carga else "", key="input_cod_nuevo")
                 nombre_nuevo = st.text_input("Nombre del producto", key="input_nom_nuevo")
                 cat_nueva = st.selectbox("Categoría", obtener_categorias(), key="cat_prod_nuevo")
-                precio_nuevo = st.number_input("Precio ($)", min_value=0.0, format="%.2f", key="precio_prod_nuevo")
-                stock_nuevo = st.number_input("Stock inicial", min_value=0, step=1, key="stock_prod_nuevo")
+                precio_nuevo = st.number_input("Precio ($) [Si es por peso, poné el valor del Kilo]", min_value=0.0, format="%.2f", key="precio_prod_nuevo")
+                stock_nuevo = st.number_input("Stock inicial (Unidades o Kilos aprox)", min_value=0.0, step=0.5, format="%.2f", key="stock_prod_nuevo")
                 
                 if st.button("Guardar Producto"):
                     if nombre_nuevo:
@@ -136,8 +135,8 @@ if check_password():
                 with st.expander(f"{item['nombre']} — ${item.get('precio', 0):.2f} | Stock: {item.get('stock', 0)}{codigo_txt} ({item.get('categoria', 'Sin categoría')})"):
                     nombre_edit = st.text_input("Nombre", value=item['nombre'], key=f"n{item['id']}")
                     codigo_edit = st.text_input("Código de barras", value=item.get('codigo', ''), key=f"cod{item['id']}")
-                    precio_edit = st.number_input("Precio", value=float(item.get('precio', 0)), key=f"p{item['id']}")
-                    stock_edit = st.number_input("Stock", value=int(item.get('stock', 0)), key=f"s{item['id']}")
+                    precio_edit = st.number_input("Precio / Valor Kilo", value=float(item.get('precio', 0)), key=f"p{item['id']}")
+                    stock_edit = st.number_input("Stock", value=float(item.get('stock', 0)), step=0.5, format="%.2f", key=f"s{item['id']}")
                     
                     cats_disp = obtener_categorias()
                     cat_idx = cats_disp.index(item.get('categoria')) if item.get('categoria') in cats_disp else 0
@@ -163,65 +162,119 @@ if check_password():
     with tab2:
         st.header("Registrar Venta")
         
-        st.write("Apunta con la cámara del celular al código de barras del producto:")
-        codigo_escaneado = qrcode_scanner(key="scanner_ventas")
+        # Opciones de tipo de venta
+        tipo_venta = st.radio("¿Cómo deseas realizar la venta?", ["📷 Con Escáner de Cámara", "📋 Selección Manual (Unidades)", "⚖️ Venta por Peso / Suelto (Ej: Pan)"])
         
         prods_ref = db.collection("productos").stream()
         productos_dict = {p.id: p.to_dict() for p in prods_ref}
-        
-        producto_encontrado_id = None
-        producto_encontrado_data = None
 
-        if codigo_escaneado:
-            st.success(f"¡Código detectado: {codigo_escaneado}!")
-            for pid, d in productos_dict.items():
-                if str(d.get('codigo', '')).strip() == str(codigo_escaneado).strip():
-                    producto_encontrado_id = pid
-                    producto_encontrado_data = d
-                    break
+        # 1. ESCÁNER
+        if tipo_venta == "📷 Con Escáner de Cámara":
+            st.write("Apunta con la cámara del celular al código de barras del producto:")
+            codigo_escaneado = qrcode_scanner(key="scanner_ventas")
             
-            if not producto_encontrado_data:
-                st.warning("El código fue leído, pero no está asociado a ningún producto cargado.")
+            producto_encontrado_id = None
+            producto_encontrado_data = None
 
-        if producto_encontrado_data:
-            st.info(f"**Producto:** {producto_encontrado_data['nombre']} | **Precio:** ${producto_encontrado_data.get('precio', 0)} | **Stock actual:** {producto_encontrado_data.get('stock', 0)}")
-            cant_vender = st.number_input("Cantidad a vender", min_value=1, step=1, value=1, key="cant_escaneada")
-            
-            if st.button("Confirmar Venta Escaneada"):
-                stock_actual = int(producto_encontrado_data.get('stock', 0))
-                if stock_actual >= cant_vender:
-                    db.collection("productos").document(producto_encontrado_id).update({"stock": stock_actual - cant_vender})
-                    st.success(f"¡Venta registrada con éxito! Stock restante: {stock_actual - cant_vender}")
-                else:
-                    st.error("¡No hay suficiente stock disponible!")
-        
-        st.write("---")
-        st.subheader("O seleccionar manualmente:")
-        
-        if productos_dict:
-            # Creamos una lista limpia de opciones para el selectbox
-            opciones_productos = []
-            mapa_opciones = {}
-            for p_id, d in productos_dict.items():
-                texto_opcion = f"{d['nombre']} (${d.get('precio', 0)}) - Stock: {d.get('stock', 0)}"
-                opciones_productos.append(texto_opcion)
-                mapa_opciones[texto_opcion] = p_id
-            
-            seleccion = st.selectbox("Seleccionar producto", opciones_productos, key="select_manual_venta")
-            cant_vender_man = st.number_input("Cantidad", min_value=1, step=1, key="cant_manual", value=1)
-            
-            if st.button("Confirmar Venta Manual"):
-                p_id_elegido = mapa_opciones[seleccion]
-                data = productos_dict[p_id_elegido]
-                stock_actual = int(data.get('stock', 0))
+            if codigo_escaneado:
+                st.success(f"¡Código detectado: {codigo_escaneado}!")
+                for pid, d in productos_dict.items():
+                    if str(d.get('codigo', '')).strip() == str(codigo_escaneado).strip():
+                        producto_encontrado_id = pid
+                        producto_encontrado_data = d
+                        break
                 
-                if stock_actual >= cant_vender_man:
-                    db.collection("productos").document(p_id_elegido).update({"stock": stock_actual - cant_vender_man})
-                    st.success(f"¡Venta registrada! Stock restante: {stock_actual - cant_vender_man}")
+                if not producto_encontrado_data:
+                    st.warning("El código fue leído, pero no está asociado a ningún producto cargado.")
+
+            if producto_encontrado_data:
+                st.info(f"**Producto:** {producto_encontrado_data['nombre']} | **Precio:** ${producto_encontrado_data.get('precio', 0)} | **Stock actual:** {producto_encontrado_data.get('stock', 0)}")
+                cant_vender = st.number_input("Cantidad a vender", min_value=1.0, step=1.0, value=1.0, key="cant_escaneada")
+                
+                if st.button("Confirmar Venta Escaneada"):
+                    stock_actual = float(producto_encontrado_data.get('stock', 0))
+                    if stock_actual >= cant_vender:
+                        db.collection("productos").document(producto_encontrado_id).update({"stock": stock_actual - cant_vender})
+                        st.success(f"¡Venta registrada con éxito! Stock restante: {stock_actual - cant_vender}")
+                    else:
+                        st.error("¡No hay suficiente stock disponible!")
+
+        # 2. SELECCIÓN MANUAL (UNIDADES)
+        elif tipo_venta == "📋 Selección Manual (Unidades)":
+            if productos_dict:
+                opciones_productos = []
+                mapa_opciones = {}
+                for p_id, d in productos_dict.items():
+                    texto_opcion = f"{d['nombre']} (${d.get('precio', 0)}) - Stock: {d.get('stock', 0)}"
+                    opciones_productos.append(texto_opcion)
+                    mapa_opciones[texto_opcion] = p_id
+                
+                seleccion = st.selectbox("Seleccionar producto", opciones_productos, key="select_manual_venta")
+                cant_vender_man = st.number_input("Cantidad", min_value=1.0, step=1.0, key="cant_manual", value=1.0)
+                
+                if st.button("Confirmar Venta Manual"):
+                    p_id_elegido = mapa_opciones[seleccion]
+                    data = productos_dict[p_id_elegido]
+                    stock_actual = float(data.get('stock', 0))
+                    
+                    if stock_actual >= cant_vender_man:
+                        db.collection("productos").document(p_id_elegido).update({"stock": stock_actual - cant_vender_man})
+                        st.success(f"¡Venta registrada! Stock restante: {stock_actual - cant_vender_man}")
+                    else:
+                        st.error("¡No hay suficiente stock disponible!")
+            else:
+                st.info("No hay productos cargados en el inventario.")
+
+        # 3. VENTA POR PESO / SUELTO
+        elif tipo_venta == "⚖️ Venta por Peso / Suelto (Ej: Pan)":
+            if productos_dict:
+                opciones_peso = []
+                mapa_peso = {}
+                for p_id, d in productos_dict.items():
+                    texto_op = f"{d['nombre']} (Valor Kilo: ${d.get('precio', 0)})"
+                    opciones_peso.append(texto_op)
+                    mapa_peso[texto_op] = p_id
+
+                sel_peso = st.selectbox("Seleccionar producto por peso", opciones_peso, key="select_peso_venta")
+                
+                # Opciones para calcular: por gramos/kilos o por plata exacta que trae el cliente
+                modo_calculo = st.radio("¿Cómo querés calcular la venta?", ["Ingresar Gramos / Kilos a llevar", "Ingresar Dinero exacto ($) que paga"])
+                
+                p_id_peso = mapa_peso[sel_peso]
+                datos_prod = productos_dict[p_id_peso]
+                precio_kilo = float(datos_prod.get('precio', 0))
+
+                if modo_calculo == "Ingresar Gramos / Kilos a llevar":
+                    # Ejemplo: 0.5 para medio kilo, 1.250 para un kilo doscientos cincuenta
+                    cantidad_kg = st.number_input("Cantidad en Kilos (Ej: 0.5 para 500g, 1 para 1kg)", min_value=0.01, value=0.5, step=0.1, format="%.3f")
+                    total_a_cobrar = precio_kilo * cantidad_kg
+                    st.write(f"### Total a cobrar: **${total_a_cobrar:.2f}**")
+                    
+                    if st.button("Confirmar Venta por Peso"):
+                        stock_actual = float(datos_prod.get('stock', 0))
+                        if stock_actual >= cantidad_kg:
+                            db.collection("productos").document(p_id_peso).update({"stock": stock_actual - cantidad_kg})
+                            st.success(f"¡Venta registrada! Total cobrado: ${total_a_cobrar:.2f}. Stock restante: {stock_actual - cantidad_kg:.3f} kg")
+                        else:
+                            st.error("¡No hay suficiente stock en la base de datos!")
+
                 else:
-                    st.error("¡No hay suficiente stock disponible!")
-        else:
-            st.info("No hay productos cargados en el inventario para seleccionar.")
+                    dinero_dado = st.number_input("¿Cuánto dinero paga el cliente? ($)", min_value=1.0, value=500.0, step=50.0)
+                    if precio_kilo > 0:
+                        kilos_calculados = dinero_dado / precio_kilo
+                        st.write(f"Equivale a: **{kilos_calculados * 1000:.0f} gramos** ({kilos_calculados:.3f} kg)")
+                        
+                        if st.button("Confirmar Venta por Dinero"):
+                            stock_actual = float(datos_prod.get('stock', 0))
+                            if stock_actual >= kilos_calculados:
+                                db.collection("productos").document(p_id_peso).update({"stock": stock_actual - kilos_calculados})
+                                st.success(f"¡Venta registrada! Se descontaron {kilos_calculados:.3f} kg del stock.")
+                            else:
+                                st.error("¡No hay suficiente stock en la base de datos!")
+                    else:
+                        st.error("Este producto tiene precio $0, así que no se puede calcular.")
+            else:
+                st.info("No hay productos cargados en el inventario.")
 
     # --- TAB 3: HISTORIAL / REPORTES ---
     with tab3:
