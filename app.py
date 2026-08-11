@@ -2,23 +2,12 @@ import streamlit as st
 import firebase_admin
 from firebase_admin import credentials, firestore
 from streamlit_qrcode_scanner import qrcode_scanner
+import json
 
-# Inicializar Firebase armando el diccionario explícitamente desde st.secrets
 if not firebase_admin._apps:
-    cred_dict = {
-        "type": st.secrets["type"],
-        "project_id": st.secrets["project_id"],
-        "private_key_id": st.secrets["private_key_id"],
-        "private_key": st.secrets["private_key"],
-        "client_email": st.secrets["client_email"],
-        "client_id": st.secrets["client_id"],
-        "auth_uri": st.secrets["auth_uri"],
-        "token_uri": st.secrets["token_uri"],
-        "auth_provider_x509_cert_url": st.secrets["auth_provider_x509_cert_url"],
-        "client_x509_cert_url": st.secrets["client_x509_cert_url"],
-        "universe_domain": st.secrets["universe_domain"]
-    }
-    cred = credentials.Certificate(cred_dict)
+    # Convertimos el string de los secretos en un diccionario JSON real
+    firebase_credentials = json.loads(st.secrets["FIREBASE_CONFIG"])
+    cred = credentials.Certificate(firebase_credentials)
     firebase_admin.initialize_app(cred)
 
 db = firestore.client()
