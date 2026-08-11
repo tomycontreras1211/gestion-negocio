@@ -31,7 +31,7 @@ if check_password():
 
     db = firestore.client()
 
-    st.title("🛒 Negocio Familiar - Gestión Integral")
+    st.title("🛒 Gestión Comercial")
 
     # Pestañas principales
     tab1, tab2, tab3 = st.tabs(["📦 Productos", "💰 Ventas", "📊 Historial / Reportes"])
