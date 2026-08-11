@@ -74,7 +74,13 @@ if check_password():
                 cat_nueva = st.selectbox("Categoría", obtener_categorias(), key="cat_prod_nuevo")
                 precio_nuevo = st.number_input("Precio ($) [O valor del Kilo]", min_value=0.0, format="%.2f", key="precio_prod_nuevo")
                 stock_nuevo = st.number_input("Stock inicial", min_value=0.0, step=0.5, format="%.2f", key="stock_prod_nuevo")
-                imagen_nueva = st.text_input("URL de la imagen (Opcional - Link de foto)", key="input_img_nuevo", placeholder="https://ejemplo.com/foto.jpg")
+                
+                imagen_nueva = st.text_input("URL de la imagen (Opcional)", key="input_img_nuevo", placeholder="https://ejemplo.com/foto.jpg")
+                if imagen_nueva.strip():
+                    try:
+                        st.image(imagen_nueva.strip(), width=100, caption="Vista previa")
+                    except:
+                        st.warning("No se pudo cargar la vista previa con esa URL.")
                 
                 if st.button("Guardar Producto"):
                     if nombre_nuevo:
@@ -134,40 +140,61 @@ if check_password():
         if lista:
             for item in lista:
                 codigo_txt = f" | Código: {item.get('codigo', 'Sin código')}" if item.get('codigo') else ""
-                with st.expander(f"{item['nombre']} — ${item.get('precio', 0):.2f} | Stock: {item.get('stock', 0)}{codigo_txt} ({item.get('categoria', 'Sin categoría')})"):
+                
+                # Diseño en columnas para mostrar la miniatura directo en la lista desplegable/encabezado
+                with st.container():
+                    col_img_list, col_txt_list = st.columns([1, 6])
                     
-                    # Mostrar imagen si tiene cargada una URL válida
-                    url_img = item.get('imagen', '')
-                    if url_img:
-                        try:
-                            st.image(url_img, width=150)
-                        except:
-                            st.warning("No se pudo cargar la imagen desde el enlace provisto.")
+                    with col_img_list:
+                        url_img = item.get('imagen', '')
+                        if url_img:
+                            try:
+                                st.image(url_img, width=50)
+                            except:
+                                st.write("🖼️")
+                        else:
+                            st.write("📦")
+                            
+                    with col_txt_list:
+                        with st.expander(f"{item['nombre']} — ${item.get('precio', 0):.2f} | Stock: {item.get('stock', 0)}{codigo_txt} ({item.get('categoria', 'Sin categoría')})"):
+                            
+                            if url_img:
+                                try:
+                                    st.image(url_img, width=150)
+                                except:
+                                    pass
 
-                    nombre_edit = st.text_input("Nombre", value=item['nombre'], key=f"n{item['id']}")
-                    codigo_edit = st.text_input("Código de barras", value=item.get('codigo', ''), key=f"cod{item['id']}")
-                    precio_edit = st.number_input("Precio / Valor Kilo", value=float(item.get('precio', 0)), key=f"p{item['id']}")
-                    stock_edit = st.number_input("Stock", value=float(item.get('stock', 0)), step=0.5, format="%.2f", key=f"s{item['id']}")
-                    imagen_edit = st.text_input("URL de la imagen", value=item.get('imagen', ''), key=f"img{item['id']}")
-                    
-                    cats_disp = obtener_categorias()
-                    cat_idx = cats_disp.index(item.get('categoria')) if item.get('categoria') in cats_disp else 0
-                    cat_edit = st.selectbox("Categoría", cats_disp, index=cat_idx, key=f"c{item['id']}")
-                    
-                    col1, col2 = st.columns(2)
-                    if col1.button("Actualizar", key=f"upd{item['id']}"):
-                        db.collection("productos").document(item['id']).update({
-                            "nombre": nombre_edit, 
-                            "codigo": codigo_edit.strip(),
-                            "precio": precio_edit, 
-                            "stock": stock_edit,
-                            "categoria": cat_edit,
-                            "imagen": imagen_edit.strip()
-                        })
-                        st.rerun()
-                    if col2.button("Eliminar", key=f"del{item['id']}"):
-                        db.collection("productos").document(item['id']).delete()
-                        st.rerun()
+                            nombre_edit = st.text_input("Nombre", value=item['nombre'], key=f"n{item['id']}")
+                            codigo_edit = st.text_input("Código de barras", value=item.get('codigo', ''), key=f"cod{item['id']}")
+                            precio_edit = st.number_input("Precio / Valor Kilo", value=float(item.get('precio', 0)), key=f"p{item['id']}")
+                            stock_edit = st.number_input("Stock", value=float(item.get('stock', 0)), step=0.5, format="%.2f", key=f"s{item['id']}")
+                            
+                            imagen_edit = st.text_input("URL de la imagen", value=item.get('imagen', ''), key=f"img{item['id']}")
+                            if imagen_edit.strip():
+                                try:
+                                    st.image(imagen_edit.strip(), width=100, caption="Vista previa edición")
+                                except:
+                                    pass
+                            
+                            cats_disp = obtener_categorias()
+                            cat_idx = cats_disp.index(item.get('categoria')) if item.get('categoria') in cats_disp else 0
+                            cat_edit = st.selectbox("Categoría", cats_disp, index=cat_idx, key=f"c{item['id']}")
+                            
+                            col1, col2 = st.columns(2)
+                            if col1.button("Actualizar", key=f"upd{item['id']}"):
+                                db.collection("productos").document(item['id']).update({
+                                    "nombre": nombre_edit, 
+                                    "codigo": codigo_edit.strip(),
+                                    "precio": precio_edit, 
+                                    "stock": stock_edit,
+                                    "categoria": cat_edit,
+                                    "imagen": imagen_edit.strip()
+                                })
+                                st.rerun()
+                            if col2.button("Eliminar", key=f"del{item['id']}"):
+                                db.collection("productos").document(item['id']).delete()
+                                st.rerun()
+                st.write("") # Pequeño espacio entre productos
         else:
             st.info("No hay productos cargados o que coincidan con la búsqueda.")
 
@@ -228,7 +255,6 @@ if check_password():
                 
                 seleccion = st.selectbox("Seleccionar producto", opciones_productos, key="select_manual_venta")
                 
-                # Mostrar imagen del producto seleccionado manualmente
                 p_id_temp = mapa_opciones[seleccion]
                 img_temp = productos_dict[p_id_temp].get('imagen', '')
                 if img_temp:
