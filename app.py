@@ -78,7 +78,7 @@ if check_password():
                 imagen_nueva = st.text_input("URL de la imagen (Opcional)", key="input_img_nuevo", placeholder="https://ejemplo.com/foto.jpg")
                 if imagen_nueva.strip():
                     try:
-                        st.image(imagen_nueva.strip(), width=100, caption="Vista previa")
+                        st.image(imagen_nueva.strip(), width=250, caption="Vista previa")
                     except:
                         st.warning("No se pudo cargar la vista previa con esa URL.")
                 
@@ -141,60 +141,46 @@ if check_password():
             for item in lista:
                 codigo_txt = f" | Código: {item.get('codigo', 'Sin código')}" if item.get('codigo') else ""
                 
-                # Diseño en columnas para mostrar la miniatura directo en la lista desplegable/encabezado
-                with st.container():
-                    col_img_list, col_txt_list = st.columns([1, 6])
+                with st.expander(f"{item['nombre']} — ${item.get('precio', 0):.2f} | Stock: {item.get('stock', 0)}{codigo_txt} ({item.get('categoria', 'Sin categoría')})"):
                     
-                    with col_img_list:
-                        url_img = item.get('imagen', '')
-                        if url_img:
-                            try:
-                                st.image(url_img, width=50)
-                            except:
-                                st.write("🖼️")
-                        else:
-                            st.write("📦")
-                            
-                    with col_txt_list:
-                        with st.expander(f"{item['nombre']} — ${item.get('precio', 0):.2f} | Stock: {item.get('stock', 0)}{codigo_txt} ({item.get('categoria', 'Sin categoría')})"):
-                            
-                            if url_img:
-                                try:
-                                    st.image(url_img, width=150)
-                                except:
-                                    pass
+                    # Imagen grande dentro del expander
+                    url_img = item.get('imagen', '')
+                    if url_img:
+                        try:
+                            st.image(url_img, width=250)
+                        except:
+                            st.warning("No se pudo cargar la imagen.")
 
-                            nombre_edit = st.text_input("Nombre", value=item['nombre'], key=f"n{item['id']}")
-                            codigo_edit = st.text_input("Código de barras", value=item.get('codigo', ''), key=f"cod{item['id']}")
-                            precio_edit = st.number_input("Precio / Valor Kilo", value=float(item.get('precio', 0)), key=f"p{item['id']}")
-                            stock_edit = st.number_input("Stock", value=float(item.get('stock', 0)), step=0.5, format="%.2f", key=f"s{item['id']}")
-                            
-                            imagen_edit = st.text_input("URL de la imagen", value=item.get('imagen', ''), key=f"img{item['id']}")
-                            if imagen_edit.strip():
-                                try:
-                                    st.image(imagen_edit.strip(), width=100, caption="Vista previa edición")
-                                except:
-                                    pass
-                            
-                            cats_disp = obtener_categorias()
-                            cat_idx = cats_disp.index(item.get('categoria')) if item.get('categoria') in cats_disp else 0
-                            cat_edit = st.selectbox("Categoría", cats_disp, index=cat_idx, key=f"c{item['id']}")
-                            
-                            col1, col2 = st.columns(2)
-                            if col1.button("Actualizar", key=f"upd{item['id']}"):
-                                db.collection("productos").document(item['id']).update({
-                                    "nombre": nombre_edit, 
-                                    "codigo": codigo_edit.strip(),
-                                    "precio": precio_edit, 
-                                    "stock": stock_edit,
-                                    "categoria": cat_edit,
-                                    "imagen": imagen_edit.strip()
-                                })
-                                st.rerun()
-                            if col2.button("Eliminar", key=f"del{item['id']}"):
-                                db.collection("productos").document(item['id']).delete()
-                                st.rerun()
-                st.write("") # Pequeño espacio entre productos
+                    nombre_edit = st.text_input("Nombre", value=item['nombre'], key=f"n{item['id']}")
+                    codigo_edit = st.text_input("Código de barras", value=item.get('codigo', ''), key=f"cod{item['id']}")
+                    precio_edit = st.number_input("Precio / Valor Kilo", value=float(item.get('precio', 0)), key=f"p{item['id']}")
+                    stock_edit = st.number_input("Stock", value=float(item.get('stock', 0)), step=0.5, format="%.2f", key=f"s{item['id']}")
+                    
+                    imagen_edit = st.text_input("URL de la imagen", value=item.get('imagen', ''), key=f"img{item['id']}")
+                    if imagen_edit.strip():
+                        try:
+                            st.image(imagen_edit.strip(), width=200, caption="Vista previa")
+                        except:
+                            pass
+                    
+                    cats_disp = obtener_categorias()
+                    cat_idx = cats_disp.index(item.get('categoria')) if item.get('categoria') in cats_disp else 0
+                    cat_edit = st.selectbox("Categoría", cats_disp, index=cat_idx, key=f"c{item['id']}")
+                    
+                    col1, col2 = st.columns(2)
+                    if col1.button("Actualizar", key=f"upd{item['id']}"):
+                        db.collection("productos").document(item['id']).update({
+                            "nombre": nombre_edit, 
+                            "codigo": codigo_edit.strip(),
+                            "precio": precio_edit, 
+                            "stock": stock_edit,
+                            "categoria": cat_edit,
+                            "imagen": imagen_edit.strip()
+                        })
+                        st.rerun()
+                    if col2.button("Eliminar", key=f"del{item['id']}"):
+                        db.collection("productos").document(item['id']).delete()
+                        st.rerun()
         else:
             st.info("No hay productos cargados o que coincidan con la búsqueda.")
 
@@ -229,7 +215,7 @@ if check_password():
             if producto_encontrado_data:
                 if producto_encontrado_data.get('imagen'):
                     try:
-                        st.image(producto_encontrado_data.get('imagen'), width=120)
+                        st.image(producto_encontrado_data.get('imagen'), width=200)
                     except:
                         pass
                 st.info(f"**Producto:** {producto_encontrado_data['nombre']} | **Precio:** ${producto_encontrado_data.get('precio', 0)} | **Stock actual:** {producto_encontrado_data.get('stock', 0)}")
@@ -246,91 +232,124 @@ if check_password():
         # 2. SELECCIÓN MANUAL (UNIDADES)
         elif tipo_venta == "📋 Selección Manual (Unidades)":
             if productos_dict:
-                opciones_productos = []
-                mapa_opciones = {}
-                for p_id, d in productos_dict.items():
-                    texto_opcion = f"{d['nombre']} (${d.get('precio', 0)}) - Stock: {d.get('stock', 0)}"
-                    opciones_productos.append(texto_opcion)
-                    mapa_opciones[texto_opcion] = p_id
-                
-                seleccion = st.selectbox("Seleccionar producto", opciones_productos, key="select_manual_venta")
-                
-                p_id_temp = mapa_opciones[seleccion]
-                img_temp = productos_dict[p_id_temp].get('imagen', '')
-                if img_temp:
-                    try:
-                        st.image(img_temp, width=100)
-                    except:
-                        pass
+                st.write("--- Filtros de búsqueda ---")
+                col_vf1, col_vf2 = st.columns(2)
+                busqueda_venta = col_vf1.text_input("🔍 Buscar producto", key="busqueda_venta_manual")
+                opciones_filtro_v = ["Todas"] + obtener_categorias()
+                filtro_cat_v = col_vf2.selectbox("Filtrar categoría", opciones_filtro_v, key="filtro_cat_venta_manual")
 
-                cant_vender_man = st.number_input("Cantidad", min_value=1.0, step=1.0, key="cant_manual", value=1.0)
-                
-                if st.button("Confirmar Venta Manual"):
-                    p_id_elegido = p_id_temp
-                    data = productos_dict[p_id_elegido]
-                    stock_actual = float(data.get('stock', 0))
+                # Filtrar productos para la venta manual
+                filtrados_dict = {}
+                for pid, d in productos_dict.items():
+                    coincide_nombre = not busqueda_venta or busqueda_venta.lower() in d['nombre'].lower() or busqueda_venta.lower() in str(d.get('codigo', '')).lower()
+                    coincide_cat = filtro_cat_v == "Todas" or d.get('categoria') == filtro_cat_v
+                    if coincide_nombre and coincide_cat:
+                        filtrados_dict[pid] = d
+
+                if filtrados_dict:
+                    opciones_productos = []
+                    mapa_opciones = {}
+                    for p_id, d in filtrados_dict.items():
+                        texto_opcion = f"{d['nombre']} (${d.get('precio', 0)}) - Stock: {d.get('stock', 0)}"
+                        opciones_productos.append(texto_opcion)
+                        mapa_opciones[texto_opcion] = p_id
                     
-                    if stock_actual >= cant_vender_man:
-                        db.collection("productos").document(p_id_elegido).update({"stock": stock_actual - cant_vender_man})
-                        st.success(f"¡Venta registrada! Stock restante: {stock_actual - cant_vender_man}")
-                    else:
-                        st.error("¡No hay suficiente stock disponible!")
+                    seleccion = st.selectbox("Seleccionar producto", opciones_productos, key="select_manual_venta")
+                    
+                    p_id_temp = mapa_opciones[seleccion]
+                    img_temp = filtrados_dict[p_id_temp].get('imagen', '')
+                    if img_temp:
+                        try:
+                            st.image(img_temp, width=200)
+                        except:
+                            pass
+
+                    cant_vender_man = st.number_input("Cantidad", min_value=1.0, step=1.0, key="cant_manual", value=1.0)
+                    
+                    if st.button("Confirmar Venta Manual"):
+                        p_id_elegido = p_id_temp
+                        data = productos_dict[p_id_elegido]
+                        stock_actual = float(data.get('stock', 0))
+                        
+                        if stock_actual >= cant_vender_man:
+                            db.collection("productos").document(p_id_elegido).update({"stock": stock_actual - cant_vender_man})
+                            st.success(f"¡Venta registrada! Stock restante: {stock_actual - cant_vender_man}")
+                        else:
+                            st.error("¡No hay suficiente stock disponible!")
+                else:
+                    st.warning("No hay productos que coincidan con la búsqueda.")
             else:
                 st.info("No hay productos cargados en el inventario.")
 
         # 3. VENTA POR PESO / SUELTO
         elif tipo_venta == "⚖️ Venta por Peso / Suelto (Ej: Pan)":
             if productos_dict:
-                opciones_peso = []
-                mapa_peso = {}
-                for p_id, d in productos_dict.items():
-                    texto_op = f"{d['nombre']} (Valor Kilo: ${d.get('precio', 0)})"
-                    opciones_peso.append(texto_op)
-                    mapa_peso[texto_op] = p_id
+                st.write("--- Filtros de búsqueda ---")
+                col_vp1, col_vp2 = st.columns(2)
+                busqueda_peso = col_vp1.text_input("🔍 Buscar producto por peso", key="busqueda_venta_peso")
+                opciones_filtro_p = ["Todas"] + obtener_categorias()
+                filtro_cat_p = col_vp2.selectbox("Filtrar categoría", opciones_filtro_p, key="filtro_cat_venta_peso")
 
-                sel_peso = st.selectbox("Seleccionar producto por peso", opciones_peso, key="select_peso_venta")
-                
-                p_id_peso = mapa_peso[sel_peso]
-                datos_prod = productos_dict[p_id_peso]
-                
-                if datos_prod.get('imagen'):
-                    try:
-                        st.image(datos_prod.get('imagen'), width=100)
-                    except:
-                        pass
+                filtrados_peso_dict = {}
+                for pid, d in productos_dict.items():
+                    coincide_nombre = not busqueda_peso or busqueda_peso.lower() in d['nombre'].lower() or busqueda_peso.lower() in str(d.get('codigo', '')).lower()
+                    coincide_cat = filtro_cat_p == "Todas" or d.get('categoria') == filtro_cat_p
+                    if coincide_nombre and coincide_cat:
+                        filtrados_peso_dict[pid] = d
 
-                modo_calculo = st.radio("¿Cómo querés calcular la venta?", ["Ingresar Gramos / Kilos a llevar", "Ingresar Dinero exacto ($) que paga"])
-                
-                precio_kilo = float(datos_prod.get('precio', 0))
+                if filtrados_peso_dict:
+                    opciones_peso = []
+                    mapa_peso = {}
+                    for p_id, d in filtrados_peso_dict.items():
+                        texto_op = f"{d['nombre']} (Valor Kilo: ${d.get('precio', 0)})"
+                        opciones_peso.append(texto_op)
+                        mapa_peso[texto_op] = p_id
 
-                if modo_calculo == "Ingresar Gramos / Kilos a llevar":
-                    cantidad_kg = st.number_input("Cantidad en Kilos (Ej: 0.5 para 500g, 1 para 1kg)", min_value=0.01, value=0.5, step=0.1, format="%.3f")
-                    total_a_cobrar = precio_kilo * cantidad_kg
-                    st.write(f"### Total a cobrar: **${total_a_cobrar:.2f}**")
+                    sel_peso = st.selectbox("Seleccionar producto por peso", opciones_peso, key="select_peso_venta")
                     
-                    if st.button("Confirmar Venta por Peso"):
-                        stock_actual = float(datos_prod.get('stock', 0))
-                        if stock_actual >= cantidad_kg:
-                            db.collection("productos").document(p_id_peso).update({"stock": stock_actual - cantidad_kg})
-                            st.success(f"¡Venta registrada! Total cobrado: ${total_a_cobrar:.2f}. Stock restante: {stock_actual - cantidad_kg:.3f} kg")
-                        else:
-                            st.error("¡No hay suficiente stock en la base de datos!")
+                    p_id_peso = mapa_peso[sel_peso]
+                    datos_prod = productos_dict[p_id_peso]
+                    
+                    if datos_prod.get('imagen'):
+                        try:
+                            st.image(datos_prod.get('imagen'), width=200)
+                        except:
+                            pass
 
-                else:
-                    dinero_dado = st.number_input("¿Cuánto dinero paga el cliente? ($)", min_value=1.0, value=500.0, step=50.0)
-                    if precio_kilo > 0:
-                        kilos_calculados = dinero_dado / precio_kilo
-                        st.write(f"Equivale a: **{kilos_calculados * 1000:.0f} gramos** ({kilos_calculados:.3f} kg)")
+                    modo_calculo = st.radio("¿Cómo querés calcular la venta?", ["Ingresar Gramos / Kilos a llevar", "Ingresar Dinero exacto ($) que paga"])
+                    
+                    precio_kilo = float(datos_prod.get('precio', 0))
+
+                    if modo_calculo == "Ingresar Gramos / Kilos a llevar":
+                        cantidad_kg = st.number_input("Cantidad en Kilos (Ej: 0.5 para 500g, 1 para 1kg)", min_value=0.01, value=0.5, step=0.1, format="%.3f")
+                        total_a_cobrar = precio_kilo * cantidad_kg
+                        st.write(f"### Total a cobrar: **${total_a_cobrar:.2f}**")
                         
-                        if st.button("Confirmar Venta por Dinero"):
+                        if st.button("Confirmar Venta por Peso"):
                             stock_actual = float(datos_prod.get('stock', 0))
-                            if stock_actual >= kilos_calculados:
-                                db.collection("productos").document(p_id_peso).update({"stock": stock_actual - kilos_calculados})
-                                st.success(f"¡Venta registrada! Se descontaron {kilos_calculados:.3f} kg del stock.")
+                            if stock_actual >= cantidad_kg:
+                                db.collection("productos").document(p_id_peso).update({"stock": stock_actual - cantidad_kg})
+                                st.success(f"¡Venta registrada! Total cobrado: ${total_a_cobrar:.2f}. Stock restante: {stock_actual - cantidad_kg:.3f} kg")
                             else:
                                 st.error("¡No hay suficiente stock en la base de datos!")
+
                     else:
-                        st.error("Este producto tiene precio $0, así que no se puede calcular.")
+                        dinero_dado = st.number_input("¿Cuánto dinero paga el cliente? ($)", min_value=1.0, value=500.0, step=50.0)
+                        if precio_kilo > 0:
+                            kilos_calculados = dinero_dado / precio_kilo
+                            st.write(f"Equivale a: **{kilos_calculados * 1000:.0f} gramos** ({kilos_calculados:.3f} kg)")
+                            
+                            if st.button("Confirmar Venta por Dinero"):
+                                stock_actual = float(datos_prod.get('stock', 0))
+                                if stock_actual >= kilos_calculados:
+                                    db.collection("productos").document(p_id_peso).update({"stock": stock_actual - kilos_calculados})
+                                    st.success(f"¡Venta registrada! Se descontaron {kilos_calculados:.3f} kg del stock.")
+                                else:
+                                    st.error("¡No hay suficiente stock en la base de datos!")
+                        else:
+                            st.error("Este producto tiene precio $0, así que no se puede calcular.")
+                else:
+                    st.warning("No hay productos que coincidan con la búsqueda.")
             else:
                 st.info("No hay productos cargados en el inventario.")
 
