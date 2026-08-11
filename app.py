@@ -251,32 +251,36 @@ if check_password():
                         st.write(f"Precio base/kilo: ${prod_seleccionado_data.get('precio', 0)}")
                         st.write(f"Stock disponible: {prod_seleccionado_data.get('stock', 0)}")
 
-                    # Definir cantidad o peso a agregar
-                    es_peso = st.checkbox("⚖️ Es por peso / monto (ej. Pan, Fiambre)", key="chk_peso_add")
+                    # Definir si es por peso o unidad
+                    es_peso = st.checkbox("⚖️ Es por peso / medida (ej. Pan, Fiambre)", key="chk_peso_add")
                     precio_b = float(prod_seleccionado_data.get('precio', 0))
 
                     cantidad_a_agregar = 1.0
                     subtotal = 0.0
 
                     if not es_peso:
-                        cantidad_a_agregar = st.number_input("Cantidad", min_value=1.0, step=1.0, value=1.0, key="cant_add_uni")
+                        cantidad_a_agregar = st.number_input("Cantidad (Unidades)", min_value=1.0, step=1.0, value=1.0, key="cant_add_uni")
                         subtotal = precio_b * cantidad_a_agregar
                     else:
-                        sub_op = st.radio("Cálculo por peso:", ["Gramos / Kilos", "Dinero exacto ($)"], key="sub_op_cart")
-                        if sub_op == "Gramos / Kilos":
-                            cantidad_a_agregar = st.number_input("Kilos (Ej: 0.5 para 500g)", min_value=0.01, value=0.5, step=0.1, format="%.3f", key="kg_add")
+                        # Submodo: Elegir si calculamos ingresando peso o ingresando dinero
+                        sub_op = st.radio("¿Cómo querés calcular?", ["Ingresar Kilos / Gramos", "Ingresar Dinero exacto ($)"], key="sub_op_cart")
+                        
+                        if sub_op == "Ingresar Kilos / Gramos":
+                            cantidad_a_agregar = st.number_input("Kilos (Ej: 0.5 para 500g, 1 para 1kg)", min_value=0.01, value=0.5, step=0.1, format="%.3f", key="kg_add")
                             subtotal = precio_b * cantidad_a_agregar
+                            st.info(f"💰 Total a cobrar: **${subtotal:.2f}**")
                         else:
-                            dinero_ing = st.number_input("Dinero ($)", min_value=1.0, value=500.0, step=50.0, key="din_add")
+                            dinero_ing = st.number_input("Dinero que entrega el cliente ($)", min_value=1.0, value=500.0, step=50.0, key="din_add")
                             if precio_b > 0:
                                 cantidad_a_agregar = dinero_ing / precio_b
                                 subtotal = dinero_ing
+                                st.info(f"⚖️ Equivale a: **{cantidad_a_agregar * 1000:.0f} gramos** ({cantidad_a_agregar:.3f} kg)")
                             else:
                                 cantidad_a_agregar = 0.0
                                 subtotal = 0.0
+                                st.error("El producto tiene precio $0.")
 
                     if st.button("➕ Agregar al Carrito"):
-                        # Revisar si hay stock suficiente considerando lo que ya está en el carrito
                         stock_actual = float(prod_seleccionado_data.get('stock', 0))
                         en_carrito = sum([item['cantidad'] for item in st.session_state.carrito if item['id'] == prod_seleccionado_id])
                         
@@ -310,8 +314,6 @@ if check_password():
 
                     col_c1, col_c2 = st.columns(2)
                     if col_c1.button("✅ Confirmar Venta Total"):
-                        # Descontar stock de Firestore para cada producto del carrito
-                        stock_ok = True
                         for item in st.session_state.carrito:
                             p_ref = db.collection("productos").document(item['id'])
                             p_data = p_ref.get().to_dict()
