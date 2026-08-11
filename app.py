@@ -5,7 +5,7 @@ from streamlit_qrcode_scanner import qrcode_scanner
 import json
 
 # --- CONFIGURACIÓN DE SEGURIDAD (CONSEGUIR PASSWORD) ---
-PASSWORD_CORRECTA = "1211" # Cambia esto por la clave que tú quieras
+PASSWORD_CORRECTA = "1211" # Cambia esto por la clave que quieras usar
 
 def check_password():
     """Devuelve True si el usuario ingresó la contraseña correcta."""
@@ -25,20 +25,19 @@ def check_password():
 
 # --- INICIO DE LA APP ---
 if check_password():
-
     if not firebase_admin._apps:
         # Convertimos el string de los secretos en un diccionario JSON real
         firebase_credentials = json.loads(st.secrets["FIREBASE_CONFIG"])
         cred = credentials.Certificate(firebase_credentials)
         firebase_admin.initialize_app(cred)
-    
+
     db = firestore.client()
-    
+
     st.title("🛒 Negocio Familiar - Gestión Integral")
-    
+
     # Pestañas principales
     tab1, tab2, tab3 = st.tabs(["📦 Productos", "💰 Ventas", "📊 Historial / Reportes"])
-    
+
     # --- FUNCIONES DE APOYO ---
     def obtener_categorias():
         cat_ref = db.collection("categorias").stream()
@@ -46,7 +45,7 @@ if check_password():
         if not lista:
             lista = ["Bebidas", "Lácteos", "Almacén", "Limpieza"]
         return lista
-    
+
     def obtener_categorias_con_id():
         cat_ref = db.collection("categorias").stream()
         lista = []
@@ -54,7 +53,7 @@ if check_password():
             data = c.to_dict()
             lista.append({"id": c.id, "nombre": data.get("nombre")})
         return sorted(lista, key=lambda x: x["nombre"])
-    
+
     # --- BARRA LATERAL: GESTIÓN RÁPIDA (Izquierda) ---
     with st.sidebar:
         st.header("➕ Agregar Producto")
@@ -68,7 +67,7 @@ if check_password():
             codigo_detectado_carga = qrcode_scanner(key="scanner_carga")
             if codigo_detectado_carga:
                 st.success(f"¡Código leído: {codigo_detectado_carga}!")
-    
+
         # El campo de texto se llena solo si se escanea, o se puede escribir a mano
         codigo_nuevo = st.text_input("Código de barras", value=codigo_detectado_carga if codigo_detectado_carga else "")
         
@@ -90,9 +89,9 @@ if check_password():
                 st.rerun()
             else:
                 st.error("Ingresa un nombre.")
-    
+
         st.divider()
-    
+
         st.header("⚙️ Gestión de Categorías")
         
         with st.expander("➕ Nueva Categoría"):
@@ -106,7 +105,7 @@ if check_password():
                         db.collection("categorias").add({"nombre": nueva_cat.strip()})
                         st.success("¡Categoría guardada!")
                         st.rerun()
-    
+
         with st.expander("🗑️ Borrar Categorías"):
             cats_existentes = obtener_categorias_con_id()
             if cats_existentes:
@@ -119,7 +118,7 @@ if check_password():
                         st.rerun()
             else:
                 st.info("No hay categorías creadas.")
-    
+
     # --- TAB 1: PRODUCTOS (Inventario Principal) ---
     with tab1:
         st.header("Inventario de Productos")
@@ -128,15 +127,15 @@ if check_password():
         busqueda = col_b1.text_input("🔍 Buscar por nombre o código")
         opciones_filtro = ["Todas"] + obtener_categorias()
         filtro_cat = col_b2.selectbox("Filtrar por categoría", opciones_filtro)
-    
+
         productos_ref = db.collection("productos").stream()
         lista = [ {**p.to_dict(), "id": p.id} for p in productos_ref ]
-    
+
         if busqueda:
             lista = [p for p in lista if busqueda.lower() in p['nombre'].lower() or busqueda.lower() in str(p.get('codigo', '')).lower()]
         if filtro_cat != "Todas":
             lista = [p for p in lista if p.get('categoria') == filtro_cat]
-    
+
         if lista:
             for item in lista:
                 codigo_txt = f" | Código: {item.get('codigo', 'Sin código')}" if item.get('codigo') else ""
@@ -165,7 +164,7 @@ if check_password():
                         st.rerun()
         else:
             st.info("No hay productos cargados o que coincidan con la búsqueda.")
-    
+
     # --- TAB 2: VENTAS (Con Escáner de Cámara) ---
     with tab2:
         st.header("Registrar Venta con Cámara")
@@ -178,7 +177,7 @@ if check_password():
         
         producto_encontrado_id = None
         producto_encontrado_data = None
-    
+
         if codigo_escaneado:
             st.success(f"¡Código detectado: {codigo_escaneado}!")
             for pid, d in productos_dict.items():
@@ -189,7 +188,7 @@ if check_password():
             
             if not producto_encontrado_data:
                 st.warning("El código fue leído, pero no está asociado a ningún producto cargado. Agrégalo en el inventario.")
-    
+
         if producto_encontrado_data:
             st.info(f"**Producto:** {producto_encontrado_data['nombre']} | **Precio:** ${producto_encontrado_data.get('precio', 0)} | **Stock actual:** {producto_encontrado_data.get('stock', 0)}")
             cant_vender = st.number_input("Cantidad a vender", min_value=1, step=1, value=1, key="cant_escaneada")
@@ -219,7 +218,7 @@ if check_password():
                 else:
                     st.error("¡No hay suficiente stock disponible!")
 
-# --- TAB 3: HISTORIAL / REPORTES ---
-with tab3:
-    st.header("Historial y Reportes")
-    st.info("Aquí podrás ver el registro de ventas diarias próximamente.")
+    # --- TAB 3: HISTORIAL / REPORTES ---
+    with tab3:
+        st.header("Historial y Reportes")
+        st.info("Aquí podrás ver el registro de ventas diarias próximamente.")
