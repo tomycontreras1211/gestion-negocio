@@ -72,8 +72,9 @@ if check_password():
                 codigo_nuevo = st.text_input("Código de barras", value=codigo_detectado_carga if codigo_detectado_carga else "", key="input_cod_nuevo")
                 nombre_nuevo = st.text_input("Nombre del producto", key="input_nom_nuevo")
                 cat_nueva = st.selectbox("Categoría", obtener_categorias(), key="cat_prod_nuevo")
-                precio_nuevo = st.number_input("Precio ($) [Si es por peso, poné el valor del Kilo]", min_value=0.0, format="%.2f", key="precio_prod_nuevo")
-                stock_nuevo = st.number_input("Stock inicial (Unidades o Kilos aprox)", min_value=0.0, step=0.5, format="%.2f", key="stock_prod_nuevo")
+                precio_nuevo = st.number_input("Precio ($) [O valor del Kilo]", min_value=0.0, format="%.2f", key="precio_prod_nuevo")
+                stock_nuevo = st.number_input("Stock inicial", min_value=0.0, step=0.5, format="%.2f", key="stock_prod_nuevo")
+                imagen_nueva = st.text_input("URL de la imagen (Opcional - Link de foto)", key="input_img_nuevo", placeholder="https://ejemplo.com/foto.jpg")
                 
                 if st.button("Guardar Producto"):
                     if nombre_nuevo:
@@ -82,7 +83,8 @@ if check_password():
                             "codigo": codigo_nuevo.strip(),
                             "categoria": cat_nueva, 
                             "precio": precio_nuevo, 
-                            "stock": stock_nuevo
+                            "stock": stock_nuevo,
+                            "imagen": imagen_nueva.strip()
                         })
                         st.success("¡Producto guardado!")
                         st.rerun()
@@ -133,10 +135,20 @@ if check_password():
             for item in lista:
                 codigo_txt = f" | Código: {item.get('codigo', 'Sin código')}" if item.get('codigo') else ""
                 with st.expander(f"{item['nombre']} — ${item.get('precio', 0):.2f} | Stock: {item.get('stock', 0)}{codigo_txt} ({item.get('categoria', 'Sin categoría')})"):
+                    
+                    # Mostrar imagen si tiene cargada una URL válida
+                    url_img = item.get('imagen', '')
+                    if url_img:
+                        try:
+                            st.image(url_img, width=150)
+                        except:
+                            st.warning("No se pudo cargar la imagen desde el enlace provisto.")
+
                     nombre_edit = st.text_input("Nombre", value=item['nombre'], key=f"n{item['id']}")
                     codigo_edit = st.text_input("Código de barras", value=item.get('codigo', ''), key=f"cod{item['id']}")
                     precio_edit = st.number_input("Precio / Valor Kilo", value=float(item.get('precio', 0)), key=f"p{item['id']}")
                     stock_edit = st.number_input("Stock", value=float(item.get('stock', 0)), step=0.5, format="%.2f", key=f"s{item['id']}")
+                    imagen_edit = st.text_input("URL de la imagen", value=item.get('imagen', ''), key=f"img{item['id']}")
                     
                     cats_disp = obtener_categorias()
                     cat_idx = cats_disp.index(item.get('categoria')) if item.get('categoria') in cats_disp else 0
@@ -149,7 +161,8 @@ if check_password():
                             "codigo": codigo_edit.strip(),
                             "precio": precio_edit, 
                             "stock": stock_edit,
-                            "categoria": cat_edit
+                            "categoria": cat_edit,
+                            "imagen": imagen_edit.strip()
                         })
                         st.rerun()
                     if col2.button("Eliminar", key=f"del{item['id']}"):
@@ -162,7 +175,6 @@ if check_password():
     with tab2:
         st.header("Registrar Venta")
         
-        # Opciones de tipo de venta
         tipo_venta = st.radio("¿Cómo deseas realizar la venta?", ["📷 Con Escáner de Cámara", "📋 Selección Manual (Unidades)", "⚖️ Venta por Peso / Suelto (Ej: Pan)"])
         
         prods_ref = db.collection("productos").stream()
@@ -188,6 +200,11 @@ if check_password():
                     st.warning("El código fue leído, pero no está asociado a ningún producto cargado.")
 
             if producto_encontrado_data:
+                if producto_encontrado_data.get('imagen'):
+                    try:
+                        st.image(producto_encontrado_data.get('imagen'), width=120)
+                    except:
+                        pass
                 st.info(f"**Producto:** {producto_encontrado_data['nombre']} | **Precio:** ${producto_encontrado_data.get('precio', 0)} | **Stock actual:** {producto_encontrado_data.get('stock', 0)}")
                 cant_vender = st.number_input("Cantidad a vender", min_value=1.0, step=1.0, value=1.0, key="cant_escaneada")
                 
@@ -210,10 +227,20 @@ if check_password():
                     mapa_opciones[texto_opcion] = p_id
                 
                 seleccion = st.selectbox("Seleccionar producto", opciones_productos, key="select_manual_venta")
+                
+                # Mostrar imagen del producto seleccionado manualmente
+                p_id_temp = mapa_opciones[seleccion]
+                img_temp = productos_dict[p_id_temp].get('imagen', '')
+                if img_temp:
+                    try:
+                        st.image(img_temp, width=100)
+                    except:
+                        pass
+
                 cant_vender_man = st.number_input("Cantidad", min_value=1.0, step=1.0, key="cant_manual", value=1.0)
                 
                 if st.button("Confirmar Venta Manual"):
-                    p_id_elegido = mapa_opciones[seleccion]
+                    p_id_elegido = p_id_temp
                     data = productos_dict[p_id_elegido]
                     stock_actual = float(data.get('stock', 0))
                     
@@ -237,15 +264,20 @@ if check_password():
 
                 sel_peso = st.selectbox("Seleccionar producto por peso", opciones_peso, key="select_peso_venta")
                 
-                # Opciones para calcular: por gramos/kilos o por plata exacta que trae el cliente
-                modo_calculo = st.radio("¿Cómo querés calcular la venta?", ["Ingresar Gramos / Kilos a llevar", "Ingresar Dinero exacto ($) que paga"])
-                
                 p_id_peso = mapa_peso[sel_peso]
                 datos_prod = productos_dict[p_id_peso]
+                
+                if datos_prod.get('imagen'):
+                    try:
+                        st.image(datos_prod.get('imagen'), width=100)
+                    except:
+                        pass
+
+                modo_calculo = st.radio("¿Cómo querés calcular la venta?", ["Ingresar Gramos / Kilos a llevar", "Ingresar Dinero exacto ($) que paga"])
+                
                 precio_kilo = float(datos_prod.get('precio', 0))
 
                 if modo_calculo == "Ingresar Gramos / Kilos a llevar":
-                    # Ejemplo: 0.5 para medio kilo, 1.250 para un kilo doscientos cincuenta
                     cantidad_kg = st.number_input("Cantidad en Kilos (Ej: 0.5 para 500g, 1 para 1kg)", min_value=0.01, value=0.5, step=0.1, format="%.3f")
                     total_a_cobrar = precio_kilo * cantidad_kg
                     st.write(f"### Total a cobrar: **${total_a_cobrar:.2f}**")
