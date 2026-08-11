@@ -2,10 +2,12 @@ import streamlit as st
 import firebase_admin
 from firebase_admin import credentials, firestore
 from streamlit_qrcode_scanner import qrcode_scanner
+import json
 
-# Inicializar Firebase directamente desde la sección del secret de Streamlit
+# Inicializar Firebase leyendo el string JSON de los Secrets
 if not firebase_admin._apps:
-    cred_dict = dict(st.secrets["FIREBASE_CREDENTIALS_JSON"])
+    cred_json_str = st.secrets["FIREBASE_CREDENTIALS_JSON"]
+    cred_dict = json.loads(cred_json_str)
     cred = credentials.Certificate(cred_dict)
     firebase_admin.initialize_app(cred)
 
