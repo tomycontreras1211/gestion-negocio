@@ -33,14 +33,11 @@ if check_password():
 
     st.title("🛒 Gestión Integral")
 
-    # Inicializar el carrito en la sesión
     if "carrito" not in st.session_state:
         st.session_state.carrito = []
 
-    # Pestañas principales
     tab1, tab2, tab3 = st.tabs(["📦 Productos", "💰 Ventas / Caja", "📊 Historial / Reportes"])
 
-    # --- FUNCIONES DE APOYO ---
     def obtener_categorias():
         cat_ref = db.collection("categorias").stream()
         lista = sorted([c.to_dict().get("nombre") for c in cat_ref])
@@ -65,7 +62,7 @@ if check_password():
             
             with col_nc1:
                 st.subheader("Nuevo Producto")
-                usar_escaner_carga = st.checkbox("📷 Usar cámara para escanear código")
+                usar_escaner_carga = st.checkbox("📷 Usar cámara para escanear código", key="chk_cam_inv")
                 codigo_detectado_carga = ""
                 
                 if usar_escaner_carga:
@@ -86,7 +83,7 @@ if check_password():
                     except:
                         st.warning("No se pudo cargar la vista previa con esa URL.")
                 
-                if st.button("Guardar Producto"):
+                if st.button("Guardar Producto", key="btn_save_prod"):
                     if nombre_nuevo:
                         db.collection("productos").add({
                             "nombre": nombre_nuevo, 
@@ -104,7 +101,7 @@ if check_password():
             with col_nc2:
                 st.subheader("Gestión de Categorías")
                 nueva_cat = st.text_input("Nombre de categoría", key="input_nueva_cat_tab")
-                if st.button("Guardar Categoría"):
+                if st.button("Guardar Categoría", key="btn_save_cat"):
                     if nueva_cat:
                         cats_actuales = [c.lower() for c in obtener_categorias()]
                         if nueva_cat.strip().lower() in cats_actuales:
@@ -122,7 +119,7 @@ if check_password():
                         col_c1, col_c2 = st.columns([2, 1])
                         col_c1.write(cat["nombre"])
                         if col_c2.button("Borrar", key=f"del_cat_{cat['id']}"):
-                            db.collection("categorias").document(cat["id"]).delete()
+                            db.collection("categorias").document(cat['id']).delete()
                             st.success("Categoría borrada")
                             st.rerun()
 
@@ -199,8 +196,7 @@ if check_password():
             with col_izq:
                 st.subheader("Catálogo de Productos")
                 
-                # Opción de escáner rápido opcional arriba
-                usar_esc = st.checkbox("📷 Usar escáner de cámara para venta rápida")
+                usar_esc = st.checkbox("📷 Usar escáner de cámara para venta rápida", key="chk_cam_venta")
                 codigo_leido_esc = ""
                 if usar_esc:
                     codigo_leido_esc = qrcode_scanner(key="scanner_carrito")
@@ -213,7 +209,6 @@ if check_password():
 
                 filtrados = {}
                 for pid, d in productos_dict.items():
-                    # Si escaneó algo, prioriza filtrar por el código escaneado
                     if codigo_leido_esc and str(codigo_leido_esc).strip() != str(d.get('codigo', '')).strip():
                         continue
                     c_nom = not busq_v or busq_v.lower() in d['nombre'].lower() or busq_v.lower() in str(d.get('codigo', '')).lower()
@@ -222,72 +217,85 @@ if check_password():
                         filtrados[pid] = d
 
                 if filtrados:
-                    st.write("Haz clic en un producto para desplegar su imagen y opciones de venta:")
+                    st.write("Despliega cada producto para ver su imagen y opciones de carga:")
                     
                     for pid, item in filtrados.items():
-                        # Aquí logramos que el acordeón muestre solo el nombre y un resumen corto, y al hacer clic despliegue todo
-                        titulo_acordeon = f"📦 {item['nombre']} — ${float(item.get('precio', 0)):.2f} (Stock: {item.get('stock', 0)})"
+                        # Creamos un contenedor visual por producto con una miniatura al lado del expansor si se desea, 
+                        # o dentro del título ponemos la miniatura simulada mediante columnas.
+                        col_min_img, col_min_exp = st.columns([0.15, 0.85])
                         
-                        with st.expander(titulo_acordeon):
-                            c_img, c_opc = st.columns([1, 1.5])
+                        with col_min_img:
+                            url_img = item.get('imagen', '')
+                            if url_img:
+                                try:
+                                    st.image(url_img, width=50)
+                                except:
+                                    st.write("📦")
+                            else:
+                                st.write("📦")
+                                
+                        with col_min_exp:
+                            titulo_acordeon = f"{item['nombre']} — ${float(item.get('precio', 0)):.2f} (Stock: {item.get('stock', 0)})"
                             
-                            with c_img:
-                                url_img = item.get('imagen', '')
-                                if url_img:
-                                    try:
-                                        st.image(url_img, width=150, caption=item['nombre'])
-                                    except:
-                                        st.info("Sin imagen disponible")
-                                else:
-                                    st.info("Sin imagen cargada")
+                            with st.expander(titulo_acordeon):
+                                c_img, c_opc = st.columns([1, 1.5])
+                                
+                                with c_img:
+                                    if url_img:
+                                        try:
+                                            st.image(url_img, width=150, caption=item['nombre'])
+                                        except:
+                                            st.info("Sin imagen")
+                                    else:
+                                        st.info("Sin imagen")
 
-                            with c_opc:
-                                st.write(f"**Categoría:** {item.get('categoria', 'General')}")
-                                st.write(f"**Precio base / Kilo:** ${item.get('precio', 0):.2f}")
-                                st.write(f"**Stock disponible:** {item.get('stock', 0)}")
+                                with c_opc:
+                                    st.write(f"**Categoría:** {item.get('categoria', 'General')}")
+                                    st.write(f"**Precio base / Kilo:** ${item.get('precio', 0):.2f}")
+                                    st.write(f"**Stock disponible:** {item.get('stock', 0)}")
 
-                                # Definir si es por peso o unidad
-                                es_peso = st.checkbox("⚖️ Es por peso / medida", key=f"chk_peso_{pid}")
-                                precio_b = float(item.get('precio', 0))
+                                    es_peso = st.checkbox("⚖️ Es por peso / medida", key=f"chk_peso_{pid}")
+                                    precio_b = float(item.get('precio', 0))
 
-                                cantidad_a_agregar = 1.0
-                                subtotal = 0.0
+                                    cantidad_a_agregar = 1.0
+                                    subtotal = 0.0
 
-                                if not es_peso:
-                                    cantidad_a_agregar = st.number_input("Cantidad (Unid.)", min_value=1.0, step=1.0, value=1.0, key=f"cant_{pid}")
-                                    subtotal = precio_b * cantidad_a_agregar
-                                else:
-                                    sub_op = st.radio("Cálculo:", ["Kilos / Gramos", "Dinero exacto ($)"], key=f"subop_{pid}")
-                                    if sub_op == "Kilos / Gramos":
-                                        cantidad_a_agregar = st.number_input("Kilos (Ej: 0.5)", min_value=0.01, value=0.5, step=0.1, format="%.3f", key=f"kg_{pid}")
+                                    if not es_peso:
+                                        cantidad_a_agregar = st.number_input("Cantidad (Unid.)", min_value=1.0, step=1.0, value=1.0, key=f"cant_{pid}")
                                         subtotal = precio_b * cantidad_a_agregar
-                                        st.caption(f"Cobrar: **${subtotal:.2f}**")
                                     else:
-                                        dinero_ing = st.number_input("Dinero ($)", min_value=1.0, value=500.0, step=50.0, key=f"din_{pid}")
-                                        if precio_b > 0:
-                                            cantidad_a_agregar = dinero_ing / precio_b
-                                            subtotal = dinero_ing
-                                            st.caption(f"Equivale a: **{cantidad_a_agregar * 1000:.0f} g** ({cantidad_a_agregar:.3f} kg)")
+                                        sub_op = st.radio("Cálculo:", ["Kilos / Gramos", "Dinero exacto ($)"], key=f"subop_{pid}")
+                                        if sub_op == "Kilos / Gramos":
+                                            cantidad_a_agregar = st.number_input("Kilos (Ej: 0.5)", min_value=0.01, value=0.5, step=0.1, format="%.3f", key=f"kg_{pid}")
+                                            subtotal = precio_b * cantidad_a_agregar
+                                            st.caption(f"Cobrar: **${subtotal:.2f}**")
                                         else:
-                                            cantidad_a_agregar = 0.0
-                                            subtotal = 0.0
+                                            dinero_ing = st.number_input("Dinero ($)", min_value=1.0, value=500.0, step=50.0, key=f"din_{pid}")
+                                            if precio_b > 0:
+                                                cantidad_a_agregar = dinero_ing / precio_b
+                                                subtotal = dinero_ing
+                                                st.caption(f"Equivale a: **{cantidad_a_agregar * 1000:.0f} g** ({cantidad_a_agregar:.3f} kg)")
+                                            else:
+                                                cantidad_a_agregar = 0.0
+                                                subtotal = 0.0
 
-                                if st.button("➕ Agregar al Ticket", key=f"btn_add_{pid}"):
-                                    stock_actual = float(item.get('stock', 0))
-                                    en_carrito = sum([x['cantidad'] for x in st.session_state.carrito if x['id'] == pid])
-                                    
-                                    if stock_actual >= (en_carrito + cantidad_a_agregar):
-                                        st.session_state.carrito.append({
-                                            "id": pid,
-                                            "nombre": item['nombre'],
-                                            "cantidad": cantidad_a_agregar,
-                                            "subtotal": subtotal,
-                                            "es_peso": es_peso
-                                        })
-                                        st.success("¡Agregado!")
-                                        st.rerun()
-                                    else:
-                                        st.error("¡No hay suficiente stock!")
+                                    if st.button("➕ Agregar al Ticket", key=f"btn_add_{pid}"):
+                                        stock_actual = float(item.get('stock', 0))
+                                        en_carrito = sum([x['cantidad'] for x in st.session_state.carrito if x['id'] == pid])
+                                        
+                                        if stock_actual >= (en_carrito + cantidad_a_agregar):
+                                            st.session_state.carrito.append({
+                                                "id": pid,
+                                                "nombre": item['nombre'],
+                                                "cantidad": cantidad_a_agregar,
+                                                "subtotal": subtotal,
+                                                "es_peso": es_peso
+                                            })
+                                            st.success("¡Agregado!")
+                                            st.rerun()
+                                        else:
+                                            st.error("¡No hay suficiente stock!")
+                        st.write("") # Separador visual leve entre productos
                 else:
                     st.warning("No hay productos que coincidan con la búsqueda.")
 
