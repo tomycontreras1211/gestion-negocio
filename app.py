@@ -307,27 +307,51 @@ if check_password():
         else:
             st.info("No hay productos cargados en el inventario.")
 
-   # --- TAB 3: HISTORIAL / REPORTES ---
+ # --- TAB 3: HISTORIAL / REPORTES ---
     with tab3:
         st.header("Historial de Ventas")
         
-        # Botón para borrar TODO el historial
-        if st.button("🗑️ Borrar TODO el historial"):
-            ventas_todo = db.collection("ventas").stream()
-            for v in ventas_todo:
-                db.collection("ventas").document(v.id).delete()
-            st.rerun()
+        # --- SECCIÓN DE SEGURIDAD PARA BORRAR TODO ---
+        with st.expander("⚙️ Opciones avanzadas del historial"):
+            confirmar_borrado_total = st.checkbox("⚠️ Habilitar opción para borrar TODO el historial", key="chk_conf_borrar_todo")
+            
+            if confirmar_borrado_total:
+                if st.button("🗑️ BORRAR TODO EL HISTORIAL DEFINITIVAMENTE", key="btn_borrar_todo"):
+                    ventas_todo = db.collection("ventas").stream()
+                    for v in ventas_todo:
+                        db.collection("ventas").document(v.id).delete()
+                    st.success("¡Todo el historial ha sido borrado!")
+                    st.rerun()
 
+        st.divider()
+
+        # --- LISTADO DE VENTAS ---
         ventas_ref = db.collection("ventas").order_by("fecha", direction=firestore.Query.DESCENDING).stream()
         
+        ventas_encontradas = False
         for v in ventas_ref:
+            ventas_encontradas = True
             data = v.to_dict()
-            fecha = data['fecha'].strftime("%d/%m/%Y %H:%M")
             
-            with st.expander(f"📅 {fecha} — Total: ${data['total']:.2f}"):
+            # Verificación de seguridad por si alguna venta vieja no tiene fecha registrada
+            if 'fecha' in data and data['fecha']:
+                fecha = data['fecha'].strftime("%d/%m/%Y %H:%M")
+            else:
+                fecha = "Fecha desconocida"
+            
+            with st.expander(f"📅 {fecha} — Total: ${data.get('total', 0):.2f}"):
                 for item in data.get('items', []):
-                    st.write(f"- {item['nombre']} ({item['cantidad']:.2f}): ${item['subtotal']:.2f}")
+                    st.write(f"- {item.get('nombre', 'Producto')} x {item.get('cantidad', 0):.2f} = **${item.get('subtotal', 0):.2f}**")
                 
+                # Botón de borrar venta individual (con su propia confirmación visual interna)
+                if st.checkbox("Marcar para eliminar esta venta", key=f"chk_del_{v.id}"):
+                    if st.button("❌ Confirmar eliminación de esta venta", key=f"btn_del_{v.id}"):
+                        db.collection("ventas").document(v.id).delete()
+                        st.success("Venta eliminada")
+                        st.rerun()
+                    
+        if not ventas_encontradas:
+            st.info("Aún no hay ventas registradas en el historial.")
                 # Botón de borrar individual
                 if st.button("❌ Eliminar esta venta", key=f"del_v_{v.id}"):
                     db.collection("ventas").document(v.id).delete()
