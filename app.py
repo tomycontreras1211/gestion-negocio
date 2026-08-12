@@ -223,8 +223,42 @@ if check_password():
                 st.divider()
                 st.markdown(f"### Total a Pagar: ${total_general:.2f}")
 
-                col_c1, col_c2 = st.columns(2)
-                if col_c1.button("✅ Confirmar Venta Total"):
+                    col_c1, col_c2 = st.columns(2)
+                    if col_c1.button("✅ Confirmar Venta Total"):
+                        
+                        # --- AQUÍ ES DONDE DEBES INSERTAR EL NUEVO CÓDIGO ---
+                        from datetime import datetime
+                        
+                        # 1. Preparar lista para guardar
+                        lista_items_guardar = []
+                        for item_c in st.session_state.carrito:
+                            lista_items_guardar.append({
+                                "nombre": item_c['nombre'],
+                                "cantidad": item_c['cantidad'],
+                                "subtotal": item_c['subtotal']
+                            })
+                            
+                        # 2. Guardar en Firestore (nueva colección "ventas")
+                        db.collection("ventas").add({
+                            "fecha": datetime.now(),
+                            "total": total_general,
+                            "items": lista_items_guardar
+                        })
+                        
+                        # 3. ACTUALIZAR STOCK (tu código original)
+                        for item_c in st.session_state.carrito:
+                            p_ref = db.collection("productos").document(item_c['id'])
+                            p_data = p_ref.get().to_dict()
+                            if p_data:
+                                nuevo_stock = float(p_data.get('stock', 0)) - item_c['cantidad']
+                                p_ref.update({"stock": nuevo_stock})
+
+                        st.success("¡Venta registrada con éxito y stock actualizado!")
+                        st.session_state.carrito = []
+                        st.rerun()
+                        # ----------------------------------------------------
+
+                    if col_c2.button("🗑️ Vaciar Carrito"):
                     for item_c in st.session_state.carrito:
                         p_ref = db.collection("productos").document(item_c['id'])
                         p_data = p_ref.get().to_dict()
@@ -349,6 +383,15 @@ if check_password():
             st.info("No hay productos cargados en el inventario.")
 
     # --- TAB 3: HISTORIAL / REPORTES ---
-    with tab3:
-        st.header("Historial y Reportes")
-        st.info("Aquí podrás ver el registro de ventas diarias próximamente.")
+with tab3:
+    st.header("Historial de Ventas")
+    
+    ventas_ref = db.collection("ventas").order_by("fecha", direction=firestore.Query.DESCENDING).stream()
+    
+    for v in ventas_ref:
+        data = v.to_dict()
+        fecha = data['fecha'].strftime("%d/%m/%Y %H:%M")
+        
+        with st.expander(f"Venta del {fecha} — Total: ${data['total']:.2f}"):
+            for item in data['items']:
+                st.write(f"- {item['nombre']} ({item['cantidad']:.2f}): ${item['subtotal']:.2f}")
