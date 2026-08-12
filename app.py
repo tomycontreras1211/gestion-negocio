@@ -129,9 +129,9 @@ if check_password():
         st.divider()
         
         col_b1, col_b2 = st.columns(2)
-        busqueda = col_b1.text_input("🔍 Buscar por nombre o código")
+        busqueda = col_b1.text_input("🔍 Buscar por nombre o código", key="busq_inv")
         opciones_filtro = ["Todas"] + obtener_categorias()
-        filtro_cat = col_b2.selectbox("Filtrar por categoría", opciones_filtro)
+        filtro_cat = col_b2.selectbox("Filtrar por categoría", opciones_filtro, key="filt_inv_cat")
 
         productos_ref = db.collection("productos").stream()
         lista = [ {**p.to_dict(), "id": p.id} for p in productos_ref ]
@@ -194,117 +194,111 @@ if check_password():
         productos_dict = {p.id: p.to_dict() for p in prods_ref}
 
         if productos_dict:
-            col_izq, col_der = st.columns([1.2, 0.8])
+            col_izq, col_der = st.columns([1.3, 0.7])
 
             with col_izq:
-                st.subheader("Agregar productos al ticket")
+                st.subheader("Catálogo de Productos")
                 
-                # Opción de escáner rápido
-                usar_esc = st.checkbox("📷 Usar escáner para agregar al carrito")
-                prod_seleccionado_id = None
-                prod_seleccionado_data = None
-
+                # Opción de escáner rápido opcional arriba
+                usar_esc = st.checkbox("📷 Usar escáner de cámara para venta rápida")
+                codigo_leido_esc = ""
                 if usar_esc:
-                    codigo_escaneado = qrcode_scanner(key="scanner_carrito")
-                    if codigo_escaneado:
-                        for pid, d in productos_dict.items():
-                            if str(d.get('codigo', '')).strip() == str(codigo_escaneado).strip():
-                                prod_seleccionado_id = pid
-                                prod_seleccionado_data = d
-                                break
-                        if not prod_seleccionado_data:
-                            st.warning("Código leído pero no encontrado en el inventario.")
+                    codigo_leido_esc = qrcode_scanner(key="scanner_carrito")
+                    if codigo_leido_esc:
+                        st.success(f"Código escaneado: {codigo_leido_esc}")
 
-                if not prod_seleccionado_data:
-                    col_f1, col_f2 = st.columns(2)
-                    busq_v = col_f1.text_input("🔍 Buscar producto", key="busq_cart")
-                    cat_v = col_f2.selectbox("Filtrar categoría", ["Todas"] + obtener_categorias(), key="cat_cart")
+                col_f1, col_f2 = st.columns(2)
+                busq_v = col_f1.text_input("🔍 Buscar producto", key="busq_cart")
+                cat_v = col_f2.selectbox("Filtrar categoría", ["Todas"] + obtener_categorias(), key="cat_cart")
 
-                    filtrados = {}
-                    for pid, d in productos_dict.items():
-                        c_nom = not busq_v or busq_v.lower() in d['nombre'].lower() or busq_v.lower() in str(d.get('codigo', '')).lower()
-                        c_cat = cat_v == "Todas" or d.get('categoria') == cat_v
-                        if c_nom and c_cat:
-                            filtrados[pid] = d
+                filtrados = {}
+                for pid, d in productos_dict.items():
+                    # Si escaneó algo, prioriza filtrar por el código escaneado
+                    if codigo_leido_esc and str(codigo_leido_esc).strip() != str(d.get('codigo', '')).strip():
+                        continue
+                    c_nom = not busq_v or busq_v.lower() in d['nombre'].lower() or busq_v.lower() in str(d.get('codigo', '')).lower()
+                    c_cat = cat_v == "Todas" or d.get('categoria') == cat_v
+                    if c_nom and c_cat:
+                        filtrados[pid] = d
 
-                    if filtrados:
-                        opciones = [f"{d['nombre']} (${d.get('precio', 0)}) - Stock: {d.get('stock', 0)}" for pid, d in filtrados.items()]
-                        mapa_ids = {f"{d['nombre']} (${d.get('precio', 0)}) - Stock: {d.get('stock', 0)}": pid for pid, d in filtrados.items()}
+                if filtrados:
+                    st.write("Haz clic en un producto para desplegar su imagen y opciones de venta:")
+                    
+                    for pid, item in filtrados.items():
+                        # Aquí logramos que el acordeón muestre solo el nombre y un resumen corto, y al hacer clic despliegue todo
+                        titulo_acordeon = f"📦 {item['nombre']} — ${float(item.get('precio', 0)):.2f} (Stock: {item.get('stock', 0)})"
                         
-                        seleccion_prod = st.selectbox("Seleccionar producto", opciones, key="sel_cart")
-                        prod_seleccionado_id = mapa_ids[seleccion_prod]
-                        prod_seleccionado_data = productos_dict[prod_seleccionado_id]
-                    else:
-                        st.warning("No hay productos con esos filtros.")
+                        with st.expander(titulo_acordeon):
+                            c_img, c_opc = st.columns([1, 1.5])
+                            
+                            with c_img:
+                                url_img = item.get('imagen', '')
+                                if url_img:
+                                    try:
+                                        st.image(url_img, width=150, caption=item['nombre'])
+                                    except:
+                                        st.info("Sin imagen disponible")
+                                else:
+                                    st.info("Sin imagen cargada")
 
-                if prod_seleccionado_data:
-                    st.write("---")
-                    col_img, col_det = st.columns([1, 2])
-                    with col_img:
-                        if prod_seleccionado_data.get('imagen'):
-                            try:
-                                st.image(prod_seleccionado_data.get('imagen'), width=120)
-                            except:
-                                pass
-                    with col_det:
-                        st.write(f"**{prod_seleccionado_data['nombre']}**")
-                        st.write(f"Precio base/kilo: ${prod_seleccionado_data.get('precio', 0)}")
-                        st.write(f"Stock disponible: {prod_seleccionado_data.get('stock', 0)}")
+                            with c_opc:
+                                st.write(f"**Categoría:** {item.get('categoria', 'General')}")
+                                st.write(f"**Precio base / Kilo:** ${item.get('precio', 0):.2f}")
+                                st.write(f"**Stock disponible:** {item.get('stock', 0)}")
 
-                    # Definir si es por peso o unidad
-                    es_peso = st.checkbox("⚖️ Es por peso / medida (ej. Pan, Fiambre)", key="chk_peso_add")
-                    precio_b = float(prod_seleccionado_data.get('precio', 0))
+                                # Definir si es por peso o unidad
+                                es_peso = st.checkbox("⚖️ Es por peso / medida", key=f"chk_peso_{pid}")
+                                precio_b = float(item.get('precio', 0))
 
-                    cantidad_a_agregar = 1.0
-                    subtotal = 0.0
-
-                    if not es_peso:
-                        cantidad_a_agregar = st.number_input("Cantidad (Unidades)", min_value=1.0, step=1.0, value=1.0, key="cant_add_uni")
-                        subtotal = precio_b * cantidad_a_agregar
-                    else:
-                        # Submodo: Elegir si calculamos ingresando peso o ingresando dinero
-                        sub_op = st.radio("¿Cómo querés calcular?", ["Ingresar Kilos / Gramos", "Ingresar Dinero exacto ($)"], key="sub_op_cart")
-                        
-                        if sub_op == "Ingresar Kilos / Gramos":
-                            cantidad_a_agregar = st.number_input("Kilos (Ej: 0.5 para 500g, 1 para 1kg)", min_value=0.01, value=0.5, step=0.1, format="%.3f", key="kg_add")
-                            subtotal = precio_b * cantidad_a_agregar
-                            st.info(f"💰 Total a cobrar: **${subtotal:.2f}**")
-                        else:
-                            dinero_ing = st.number_input("Dinero que entrega el cliente ($)", min_value=1.0, value=500.0, step=50.0, key="din_add")
-                            if precio_b > 0:
-                                cantidad_a_agregar = dinero_ing / precio_b
-                                subtotal = dinero_ing
-                                st.info(f"⚖️ Equivale a: **{cantidad_a_agregar * 1000:.0f} gramos** ({cantidad_a_agregar:.3f} kg)")
-                            else:
-                                cantidad_a_agregar = 0.0
+                                cantidad_a_agregar = 1.0
                                 subtotal = 0.0
-                                st.error("El producto tiene precio $0.")
 
-                    if st.button("➕ Agregar al Carrito"):
-                        stock_actual = float(prod_seleccionado_data.get('stock', 0))
-                        en_carrito = sum([item['cantidad'] for item in st.session_state.carrito if item['id'] == prod_seleccionado_id])
-                        
-                        if stock_actual >= (en_carrito + cantidad_a_agregar):
-                            st.session_state.carrito.append({
-                                "id": prod_seleccionado_id,
-                                "nombre": prod_seleccionado_data['nombre'],
-                                "cantidad": cantidad_a_agregar,
-                                "subtotal": subtotal,
-                                "es_peso": es_peso
-                            })
-                            st.success("¡Agregado al ticket!")
-                            st.rerun()
-                        else:
-                            st.error("¡No hay suficiente stock disponible para agregar más!")
+                                if not es_peso:
+                                    cantidad_a_agregar = st.number_input("Cantidad (Unid.)", min_value=1.0, step=1.0, value=1.0, key=f"cant_{pid}")
+                                    subtotal = precio_b * cantidad_a_agregar
+                                else:
+                                    sub_op = st.radio("Cálculo:", ["Kilos / Gramos", "Dinero exacto ($)"], key=f"subop_{pid}")
+                                    if sub_op == "Kilos / Gramos":
+                                        cantidad_a_agregar = st.number_input("Kilos (Ej: 0.5)", min_value=0.01, value=0.5, step=0.1, format="%.3f", key=f"kg_{pid}")
+                                        subtotal = precio_b * cantidad_a_agregar
+                                        st.caption(f"Cobrar: **${subtotal:.2f}**")
+                                    else:
+                                        dinero_ing = st.number_input("Dinero ($)", min_value=1.0, value=500.0, step=50.0, key=f"din_{pid}")
+                                        if precio_b > 0:
+                                            cantidad_a_agregar = dinero_ing / precio_b
+                                            subtotal = dinero_ing
+                                            st.caption(f"Equivale a: **{cantidad_a_agregar * 1000:.0f} g** ({cantidad_a_agregar:.3f} kg)")
+                                        else:
+                                            cantidad_a_agregar = 0.0
+                                            subtotal = 0.0
+
+                                if st.button("➕ Agregar al Ticket", key=f"btn_add_{pid}"):
+                                    stock_actual = float(item.get('stock', 0))
+                                    en_carrito = sum([x['cantidad'] for x in st.session_state.carrito if x['id'] == pid])
+                                    
+                                    if stock_actual >= (en_carrito + cantidad_a_agregar):
+                                        st.session_state.carrito.append({
+                                            "id": pid,
+                                            "nombre": item['nombre'],
+                                            "cantidad": cantidad_a_agregar,
+                                            "subtotal": subtotal,
+                                            "es_peso": es_peso
+                                        })
+                                        st.success("¡Agregado!")
+                                        st.rerun()
+                                    else:
+                                        st.error("¡No hay suficiente stock!")
+                else:
+                    st.warning("No hay productos que coincidan con la búsqueda.")
 
             with col_der:
                 st.subheader("🧾 Ticket Actual")
                 if st.session_state.carrito:
                     total_general = 0
-                    for i, item in enumerate(st.session_state.carrito):
-                        unidad_txt = "kg" if item['es_peso'] else "unid."
-                        st.write(f"**{item['nombre']}** ({item['cantidad']:.3f} {unidad_txt}) — **${item['subtotal']:.2f}**")
-                        total_general += item['subtotal']
+                    for i, item_c in enumerate(st.session_state.carrito):
+                        unidad_txt = "kg" if item_c['es_peso'] else "unid."
+                        st.write(f"**{item_c['nombre']}** ({item_c['cantidad']:.3f} {unidad_txt}) — **${item_c['subtotal']:.2f}**")
+                        total_general += item_c['subtotal']
                         if st.button("❌ Quitar", key=f"quitar_{i}"):
                             st.session_state.carrito.pop(i)
                             st.rerun()
@@ -314,11 +308,11 @@ if check_password():
 
                     col_c1, col_c2 = st.columns(2)
                     if col_c1.button("✅ Confirmar Venta Total"):
-                        for item in st.session_state.carrito:
-                            p_ref = db.collection("productos").document(item['id'])
+                        for item_c in st.session_state.carrito:
+                            p_ref = db.collection("productos").document(item_c['id'])
                             p_data = p_ref.get().to_dict()
                             if p_data:
-                                nuevo_stock = float(p_data.get('stock', 0)) - item['cantidad']
+                                nuevo_stock = float(p_data.get('stock', 0)) - item_c['cantidad']
                                 p_ref.update({"stock": nuevo_stock})
 
                         st.success("¡Venta registrada con éxito y stock actualizado!")
