@@ -53,152 +53,96 @@ if check_password():
             lista.append({"id": c.id, "nombre": data.get("nombre")})
         return sorted(lista, key=lambda x: x["nombre"])
 
-    # --- TAB 1: PRODUCTOS ---
+# --- TAB 1: GESTIÓN DE PRODUCTOS ---
     with tab1:
-        st.header("Inventario de Productos")
+        st.header("📦 Gestión de Inventario")
 
-        with st.expander("➕ Agregar Nuevo Producto o Categoría"):
-            col_nc1, col_nc2 = st.columns(2)
+        # --- SECCIÓN DE BÚSQUEDA Y FILTRO ---
+        st.subheader("Buscar y Filtrar")
+        
+        # Integración del escáner
+        usar_esc_inv = st.checkbox("📷 Escanear código para buscar producto", key="chk_esc_inv")
+        cod_escaneado = ""
+        if usar_esc_inv:
+            cod_escaneado = qrcode_scanner(key="scanner_inv")
+            if cod_escaneado:
+                st.success(f"Código detectado: {cod_escaneado}")
+
+        col_b1, col_b2 = st.columns([0.7, 0.3])
+        
+        # Si se escanea algo, se precarga en el input de búsqueda
+        valor_busqueda = cod_escaneado if cod_escaneado else ""
+        busq_prod = col_b1.text_input("🔍 Buscar por nombre o código", value=valor_busqueda, key="busq_inv")
+        cat_prod = col_b2.selectbox("Filtrar categoría", ["Todas"] + obtener_categorias(), key="cat_inv")
+
+        # --- OBTENCIÓN Y FILTRADO DE PRODUCTOS ---
+        prods_ref = db.collection("productos").stream()
+        productos_lista = [p for p in prods_ref]
+
+        filtrados = []
+        for p in productos_lista:
+            d = p.to_dict()
+            # Criterios de filtrado
+            c_nom = not busq_prod or busq_prod.lower() in d.get('nombre', '').lower() or \
+                    busq_prod.lower() in str(d.get('codigo', '')).lower()
+            c_cat = cat_prod == "Todas" or d.get('categoria') == cat_prod
             
-            with col_nc1:
-                st.subheader("Nuevo Producto")
-                usar_escaner_carga = st.checkbox("📷 Usar cámara para escanear código", key="chk_cam_inv")
-                codigo_detectado_carga = ""
-                
-                if usar_escaner_carga:
-                    codigo_detectado_carga = qrcode_scanner(key="scanner_carga")
-                    if codigo_detectado_carga:
-                        st.success(f"¡Código leído: {codigo_detectado_carga}!")
+            if c_nom and c_cat:
+                filtrados.append((p.id, d))
 
-                codigo_nuevo = st.text_input("Código de barras", value=codigo_detectado_carga if codigo_detectado_carga else "", key="input_cod_nuevo")
-                nombre_nuevo = st.text_input("Nombre del producto", key="input_nom_nuevo")
-                cat_nueva = st.selectbox("Categoría", obtener_categorias(), key="cat_prod_nuevo")
-                precio_nuevo = st.number_input("Precio ($) [Unitario o valor del Kilo]", min_value=0.0, format="%.2f", key="precio_prod_nuevo")
-                stock_nuevo = st.number_input("Stock inicial", min_value=0.0, step=0.5, format="%.2f", key="stock_prod_nuevo")
-                
-                imagen_nueva = st.text_input("URL de la imagen (Opcional)", key="input_img_nuevo", placeholder="https://ejemplo.com/foto.jpg")
-                if imagen_nueva.strip():
-                    try:
-                        st.image(imagen_nueva.strip(), width=250, caption="Vista previa")
-                    except:
-                        st.warning("No se pudo cargar la vista previa con esa URL.")
-                
-                if st.button("Guardar Producto", key="btn_save_prod"):
-                    if nombre_nuevo:
-                        db.collection("productos").add({
-                            "nombre": nombre_nuevo, 
-                            "codigo": codigo_nuevo.strip(),
-                            "categoria": cat_nueva, 
-                            "precio": precio_nuevo, 
-                            "stock": stock_nuevo,
-                            "imagen": imagen_nueva.strip()
+        # --- MOSTRAR PRODUCTOS ---
+        if filtrados:
+            st.write(f"Mostrando {len(filtrados)} productos:")
+            for pid, item in filtrados:
+                with st.expander(f"{item.get('nombre')} — Stock: {item.get('stock')} | Precio: ${item.get('precio', 0):.2f}"):
+                    c_edit_col1, c_edit_col2 = st.columns(2)
+                    
+                    with c_edit_col1:
+                        nuevo_nombre = st.text_input("Nombre", value=item.get('nombre'), key=f"nom_{pid}")
+                        nuevo_precio = st.number_input("Precio", value=float(item.get('precio', 0)), key=f"pre_{pid}")
+                    
+                    with c_edit_col2:
+                        nuevo_stock = st.number_input("Stock", value=float(item.get('stock', 0)), key=f"stk_{pid}")
+                        nuevo_cod = st.text_input("Código", value=item.get('codigo', ''), key=f"cod_{pid}")
+
+                    if st.button("💾 Guardar Cambios", key=f"btn_save_{pid}"):
+                        db.collection("productos").document(pid).update({
+                            "nombre": nuevo_nombre,
+                            "precio": nuevo_precio,
+                            "stock": nuevo_stock,
+                            "codigo": nuevo_cod
                         })
-                        st.success("¡Producto guardado!")
+                        st.success("¡Producto actualizado!")
                         st.rerun()
-                    else:
-                        st.error("Ingresa un nombre.")
 
-            with col_nc2:
-                st.subheader("Gestión de Categorías")
-                nueva_cat = st.text_input("Nombre de categoría", key="input_nueva_cat_tab")
-                if st.button("Guardar Categoría", key="btn_save_cat"):
-                    if nueva_cat:
-                        cats_actuales = [c.lower() for c in obtener_categorias()]
-                        if nueva_cat.strip().lower() in cats_actuales:
-                            st.warning("Esa categoría ya existe.")
-                        else:
-                            db.collection("categorias").add({"nombre": nueva_cat.strip()})
-                            st.success("¡Categoría guardada!")
-                            st.rerun()
-
-                st.write("---")
-                st.write("Categorías existentes:")
-                cats_existentes = obtener_categorias_con_id()
-                if cats_existentes:
-                    for cat in cats_existentes:
-                        col_c1, col_c2 = st.columns([2, 1])
-                        col_c1.write(cat["nombre"])
-                        if col_c2.button("Borrar", key=f"del_cat_{cat['id']}"):
-                            db.collection("categorias").document(cat['id']).delete()
-                            st.success("Categoría borrada")
-                            st.rerun()
+                    if st.button("🗑️ Eliminar Producto", key=f"btn_del_{pid}"):
+                        db.collection("productos").document(pid).delete()
+                        st.rerun()
+        else:
+            st.warning("No se encontraron productos.")
 
         st.divider()
-        
-        col_b1, col_b2 = st.columns(2)
-        busqueda = col_b1.text_input("🔍 Buscar por nombre o código", key="busq_inv")
-        opciones_filtro = ["Todas"] + obtener_categorias()
-        filtro_cat = col_b2.selectbox("Filtrar por categoría", opciones_filtro, key="filt_inv_cat")
-
-        productos_ref = db.collection("productos").stream()
-        lista = [ {**p.to_dict(), "id": p.id} for p in productos_ref ]
-
-        if busqueda:
-            lista = [p for p in lista if busqueda.lower() in p['nombre'].lower() or busqueda.lower() in str(p.get('codigo', '')).lower()]
-        if filtro_cat != "Todas":
-            lista = [p for p in lista if p.get('categoria') == filtro_cat]
-
-        if lista:
-            st.write("Despliega cada producto para editar sus datos:")
-            for item in lista:
-                codigo_txt = f" | Código: {item.get('codigo', 'Sin código')}" if item.get('codigo') else ""
-                
-                col_min_img, col_min_exp = st.columns([0.15, 0.85])
-                
-                with col_min_img:
-                    url_img = item.get('imagen', '')
-                    if url_img:
-                        try:
-                            st.image(url_img, width=50)
-                        except:
-                            st.write("📦")
-                    else:
-                        st.write("📦")
-                        
-                with col_min_exp:
-                    titulo_acordeon = f"{item['nombre']} — ${item.get('precio', 0):.2f} | Stock: {item.get('stock', 0)}{codigo_txt} ({item.get('categoria', 'Sin categoría')})"
-                    
-                    with st.expander(titulo_acordeon):
-                        if url_img:
-                            try:
-                                st.image(url_img, width=250)
-                            except:
-                                st.warning("No se pudo cargar la imagen.")
-
-                        nombre_edit = st.text_input("Nombre", value=item['nombre'], key=f"n{item['id']}")
-                        codigo_edit = st.text_input("Código de barras", value=item.get('codigo', ''), key=f"cod{item['id']}")
-                        precio_edit = st.number_input("Precio / Valor Kilo", value=float(item.get('precio', 0)), key=f"p{item['id']}")
-                        stock_edit = st.number_input("Stock", value=float(item.get('stock', 0)), step=0.5, format="%.2f", key=f"s{item['id']}")
-                        
-                        imagen_edit = st.text_input("URL de la imagen", value=item.get('imagen', ''), key=f"img{item['id']}")
-                        if imagen_edit.strip():
-                            try:
-                                st.image(imagen_edit.strip(), width=200, caption="Vista previa")
-                            except:
-                                pass
-                        
-                        cats_disp = obtener_categorias()
-                        cat_idx = cats_disp.index(item.get('categoria')) if item.get('categoria') in cats_disp else 0
-                        cat_edit = st.selectbox("Categoría", cats_disp, index=cat_idx, key=f"c{item['id']}")
-                        
-                        col1, col2 = st.columns(2)
-                        if col1.button("Actualizar", key=f"upd{item['id']}"):
-                            db.collection("productos").document(item['id']).update({
-                                "nombre": nombre_edit, 
-                                "codigo": codigo_edit.strip(),
-                                "precio": precio_edit, 
-                                "stock": stock_edit,
-                                "categoria": cat_edit,
-                                "imagen": imagen_edit.strip()
-                            })
-                            st.rerun()
-                        if col2.button("Eliminar", key=f"del{item['id']}"):
-                            db.collection("productos").document(item['id']).delete()
-                            st.rerun()
-                st.write("")
-        else:
-            st.info("No hay productos cargados o que coincidan con la búsqueda.")
-
+        # --- SECCIÓN PARA AGREGAR NUEVO PRODUCTO ---
+        with st.expander("➕ Agregar nuevo producto"):
+            n_nombre = st.text_input("Nombre del producto")
+            n_precio = st.number_input("Precio base", min_value=0.0)
+            n_stock = st.number_input("Stock inicial", min_value=0.0)
+            n_cat = st.text_input("Categoría")
+            n_cod = st.text_input("Código (opcional)")
+            
+            if st.button("Guardar nuevo producto"):
+                if n_nombre:
+                    db.collection("productos").add({
+                        "nombre": n_nombre,
+                        "precio": n_precio,
+                        "stock": n_stock,
+                        "categoria": n_cat,
+                        "codigo": n_cod
+                    })
+                    st.success("Producto agregado correctamente")
+                    st.rerun()
+                else:
+                    st.error("El nombre es obligatorio")
 # --- TAB 2: VENTAS / CAJA (CARRITO) ---
     with tab2:
         st.header("🛒 Caja / Carrito de Ventas")
@@ -363,21 +307,28 @@ if check_password():
         else:
             st.info("No hay productos cargados en el inventario.")
 
-    # --- TAB 3: HISTORIAL / REPORTES ---
+   # --- TAB 3: HISTORIAL / REPORTES ---
     with tab3:
         st.header("Historial de Ventas")
         
+        # Botón para borrar TODO el historial
+        if st.button("🗑️ Borrar TODO el historial"):
+            ventas_todo = db.collection("ventas").stream()
+            for v in ventas_todo:
+                db.collection("ventas").document(v.id).delete()
+            st.rerun()
+
         ventas_ref = db.collection("ventas").order_by("fecha", direction=firestore.Query.DESCENDING).stream()
         
-        ventas_encontradas = False
         for v in ventas_ref:
-            ventas_encontradas = True
             data = v.to_dict()
             fecha = data['fecha'].strftime("%d/%m/%Y %H:%M")
             
             with st.expander(f"📅 {fecha} — Total: ${data['total']:.2f}"):
                 for item in data.get('items', []):
-                    st.write(f"- {item['nombre']} x {item['cantidad']:.2f} = **${item['subtotal']:.2f}**")
-                    
-        if not ventas_encontradas:
-            st.info("Aún no hay ventas registradas.")
+                    st.write(f"- {item['nombre']} ({item['cantidad']:.2f}): ${item['subtotal']:.2f}")
+                
+                # Botón de borrar individual
+                if st.button("❌ Eliminar esta venta", key=f"del_v_{v.id}"):
+                    db.collection("ventas").document(v.id).delete()
+                    st.rerun()
