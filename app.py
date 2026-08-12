@@ -15,7 +15,7 @@ def check_password():
         st.session_state.rol = None
         
     if not st.session_state.autenticado:
-        st.title("🛒 Negocio Familiar - Login")
+        st.title("🛒 Negocio - Login")
         input_pass = st.text_input("Ingrese su contraseña para acceder:", type="password")
         
         if st.button("Acceder"):
