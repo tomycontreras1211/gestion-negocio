@@ -402,7 +402,7 @@ if check_password():
             # --- SECCIÓN DE REPORTES / MÉTRICAS ---
             st.subheader("Resumen General")
             
-            ventas_ref = db.collection("ventas").stream()
+            ventas_ref = db.collection("ventas").order_by("fecha", direction=firestore.Query.DESCENDING).stream()
             
             total_historico = 0.0
             ventas_hoy = 0.0
@@ -412,44 +412,25 @@ if check_password():
             hoy = datetime.now()
             hoy_str = hoy.strftime("%Y-%m-%d")
             mes_actual_str = hoy.strftime("%Y-%m")
-            # Inicio de semana (Lunes)
-            inicio_semana = hoy - timedelta(days=hoy.weekday())
-            inicio_semana = inicio_semana.replace(hour=0, minute=0, second=0, microsecond=0)
+            inicio_semana = (hoy - timedelta(days=hoy.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
             
-            lista_ventas_procesadas = []
+            lista_completa = []
             
             for v in ventas_ref:
                 data = v.to_dict()
                 total_v = float(data.get('total', 0))
                 total_historico += total_v
                 
-                # Manejo de fecha desde Firestore
                 f_obj = data.get('fecha')
-                if hasattr(f_obj, 'to_datetime'):
-                    f_dt = f_obj.to_datetime()
-                else:
-                    f_dt = f_obj
+                f_dt = f_obj.to_datetime() if hasattr(f_obj, 'to_datetime') else f_obj
                 
-                fecha_str_completa = f_dt.strftime("%d/%m/%Y %H:%M")
-                
-                # Filtros
-                if f_dt.strftime("%Y-%m-%d") == hoy_str:
-                    ventas_hoy += total_v
-                
-                if f_dt >= inicio_semana:
-                    ventas_semana += total_v
+                # Acumuladores de métricas
+                if f_dt.strftime("%Y-%m-%d") == hoy_str: ventas_hoy += total_v
+                if f_dt >= inicio_semana: ventas_semana += total_v
+                if f_dt.strftime("%Y-%m") == mes_actual_str: ventas_mes += total_v
                     
-                if f_dt.strftime("%Y-%m") == mes_actual_str:
-                    ventas_mes += total_v
-                    
-                lista_ventas_procesadas.append({
-                    "id": v.id,
-                    "fecha_txt": fecha_str_completa,
-                    "total": total_v,
-                    "items": data.get('items', [])
-                })
+                lista_completa.append({"id": v.id, "dt": f_dt, "total": total_v, "items": data.get('items', [])})
 
-            # Mostrar métricas
             col_m1, col_m2, col_m3, col_m4 = st.columns(4)
             col_m1.metric("📅 Hoy", f"${ventas_hoy:.2f}")
             col_m2.metric("🗓️ Sem.", f"${ventas_semana:.2f}")
@@ -458,40 +439,41 @@ if check_password():
 
             st.divider()
 
-            # --- OPCIONES AVANZADAS Y LISTADO ---
-            with st.expander("⚙️ Opciones avanzadas del historial"):
-                confirmar_borrado_total = st.checkbox("⚠️ Habilitar opción para borrar TODO el historial", key="chk_conf_borrar_total")
-                
-                if confirmar_borrado_total:
-                    if st.button("🗑️ BORRAR TODO EL HISTORIAL DEFINITIVAMENTE", key="btn_borrar_todo"):
-                        for v_item in lista_ventas_procesadas:
-                            db.collection("ventas").document(v_item["id"]).delete()
-                        st.success("¡Todo el historial ha sido borrado!")
-                        st.rerun()
-
-# --- LISTADO AGRUPADO ---
+            # --- FILTRO Y LISTADO ---
             st.subheader("Detalle de Ventas")
-            
-            if lista_ventas_procesadas:
-                # 1. Definimos los grupos
-                ventas_hoy_list = [v for v in lista_ventas_procesadas if v['fecha_txt'][:10] == hoy.strftime("%d/%m/%Y")]
-                # (Podemos simplificar filtrando por la fecha_txt o fecha real)
-                
-                # Para hacerlo más dinámico, vamos a mostrar 3 grupos:
-                with st.expander("📅 Ventas de HOY", expanded=True):
-                    if ventas_hoy_list:
-                        for v in ventas_hoy_list:
-                            st.write(f"**{v['fecha_txt']}** — Total: ${v['total']:.2f}")
-                    else:
-                        st.write("No hubo ventas hoy.")
-                
-                with st.expander("🗓️ Ventas de la SEMANA"):
-                    # Filtramos las de la semana excluyendo las de hoy
-                    ventas_semana_list = [v for v in lista_ventas_procesadas if v not in ventas_hoy_list] # Lógica simplificada
-                    for v in ventas_semana_list[:10]: # Mostramos las últimas 10
-                        st.write(f"**{v['fecha_txt']}** — Total: ${v['total']:.2f}")
-                
-                with st.expander("📁 Historial ANTERIOR"):
-                    st.write("Aquí verías ventas más antiguas...")
+            filtro_vista = st.selectbox("Filtrar historial por:", ["Todo el historial", "Solo HOY", "Solo esta SEMANA", "Solo este MES"], key="filtro_hist")
+
+            if filtro_vista == "Solo HOY":
+                lista_filtrada = [v for v in lista_completa if v['dt'].strftime("%Y-%m-%d") == hoy_str]
+            elif filtro_vista == "Solo esta SEMANA":
+                lista_filtrada = [v for v in lista_completa if v['dt'] >= inicio_semana]
+            elif filtro_vista == "Solo este MES":
+                lista_filtrada = [v for v in lista_completa if v['dt'].strftime("%Y-%m") == mes_actual_str]
             else:
+                lista_filtrada = lista_completa
+
+            if lista_filtrada:
+                for v in lista_filtrada:
+                    fecha_fmt = v['dt'].strftime("%d/%m/%Y %H:%M")
+                    with st.expander(f"📅 {fecha_fmt} — Total: ${v['total']:.2f}"):
+                        for item in v['items']:
+                            st.write(f"- {item.get('nombre', 'Producto')} x {item.get('cantidad', 0):.2f} = **${item.get('subtotal', 0):.2f}**")
+                        
+                        if st.checkbox("Marcar para eliminar esta venta", key=f"del_{v['id']}"):
+                            if st.button("❌ Confirmar eliminación", key=f"btn_{v['id']}"):
+                                db.collection("ventas").document(v['id']).delete()
+                                st.success("Venta eliminada")
+                                st.rerun()
+            else:
+                st.info("No se encontraron ventas para el filtro seleccionado.")
+
+            st.divider()
+            # --- OPCIONES AVANZADAS ---
+            with st.expander("⚙️ Opciones avanzadas"):
+                if st.checkbox("⚠️ Habilitar borrado masivo", key="check_masivo"):
+                    if st.button("🗑️ BORRAR TODO EL HISTORIAL"):
+                        for v in lista_completa:
+                            db.collection("ventas").document(v["id"]).delete()
+                        st.success("Historial borrado.")
+                        st.rerun()
                 st.info("Aún no hay ventas registradas.")
