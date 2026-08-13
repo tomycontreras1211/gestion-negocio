@@ -3,6 +3,7 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 from streamlit_qrcode_scanner import qrcode_scanner
 import json
+from datetime import datetime, timedelta
 from datetime import datetime
 
 # --- CONFIGURACIÓN DE ROLES Y CONTRASEÑAS ---
@@ -393,45 +394,94 @@ if check_password():
         else:
             st.info("No hay productos cargados en el inventario.")
 
-    # --- TAB 3: HISTORIAL / REPORTES (Solo Padres) ---
+# --- TAB 3: HISTORIAL / REPORTES (Solo Padres) ---
     if st.session_state.rol == "padres":
         with tab3:
-            st.header("Historial de Ventas")
+            st.header("📊 Reportes y Historial de Ventas")
             
-            with st.expander("⚙️ Opciones avanzadas del historial"):
-                confirmar_borrado_total = st.checkbox("⚠️ Habilitar opción para borrar TODO el historial", key="chk_conf_borrar_todo")
+            # --- SECCIÓN DE REPORTES / MÉTRICAS ---
+            st.subheader("Resumen General")
+            
+            ventas_ref = db.collection("ventas").stream()
+            
+            total_historico = 0.0
+            ventas_hoy = 0.0
+            ventas_semana = 0.0
+            ventas_mes = 0.0
+            
+            hoy = datetime.now()
+            hoy_str = hoy.strftime("%Y-%m-%d")
+            mes_actual_str = hoy.strftime("%Y-%m")
+            # Inicio de semana (Lunes)
+            inicio_semana = hoy - timedelta(days=hoy.weekday())
+            inicio_semana = inicio_semana.replace(hour=0, minute=0, second=0, microsecond=0)
+            
+            lista_ventas_procesadas = []
+            
+            for v in ventas_ref:
+                data = v.to_dict()
+                total_v = float(data.get('total', 0))
+                total_historico += total_v
                 
-                if confirmar_borrado_total:
-                    if st.button("🗑️ BORRAR TODO EL HISTORIAL DEFINITIVAMENTE", key="btn_borrar_todo"):
-                        ventas_todo = db.collection("ventas").stream()
-                        for v in ventas_todo:
-                            db.collection("ventas").document(v.id).delete()
-                        st.success("¡Todo el historial ha sido borrado!")
-                        st.rerun()
+                # Manejo de fecha desde Firestore
+                f_obj = data.get('fecha')
+                if hasattr(f_obj, 'to_datetime'):
+                    f_dt = f_obj.to_datetime()
+                else:
+                    f_dt = f_obj
+                
+                fecha_str_completa = f_dt.strftime("%d/%m/%Y %H:%M")
+                
+                # Filtros
+                if f_dt.strftime("%Y-%m-%d") == hoy_str:
+                    ventas_hoy += total_v
+                
+                if f_dt >= inicio_semana:
+                    ventas_semana += total_v
+                    
+                if f_dt.strftime("%Y-%m") == mes_actual_str:
+                    ventas_mes += total_v
+                    
+                lista_ventas_procesadas.append({
+                    "id": v.id,
+                    "fecha_txt": fecha_str_completa,
+                    "total": total_v,
+                    "items": data.get('items', [])
+                })
+
+            # Mostrar métricas
+            col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+            col_m1.metric("📅 Hoy", f"${ventas_hoy:.2f}")
+            col_m2.metric("🗓️ Sem.", f"${ventas_semana:.2f}")
+            col_m3.metric("📆 Mes", f"${ventas_mes:.2f}")
+            col_m4.metric("💰 Total", f"${total_historico:.2f}")
 
             st.divider()
 
-            ventas_ref = db.collection("ventas").order_by("fecha", direction=firestore.Query.DESCENDING).stream()
+            # --- OPCIONES AVANZADAS Y LISTADO ---
+            with st.expander("⚙️ Opciones avanzadas del historial"):
+                confirmar_borrado_total = st.checkbox("⚠️ Habilitar opción para borrar TODO el historial", key="chk_conf_borrar_total")
+                
+                if confirmar_borrado_total:
+                    if st.button("🗑️ BORRAR TODO EL HISTORIAL DEFINITIVAMENTE", key="btn_borrar_todo"):
+                        for v_item in lista_ventas_procesadas:
+                            db.collection("ventas").document(v_item["id"]).delete()
+                        st.success("¡Todo el historial ha sido borrado!")
+                        st.rerun()
+
+            st.subheader("Detalle de Ventas")
             
-            ventas_encontradas = False
-            for v in ventas_ref:
-                ventas_encontradas = True
-                data = v.to_dict()
-                
-                if 'fecha' in data and data['fecha']:
-                    fecha = data['fecha'].strftime("%d/%m/%Y %H:%M")
-                else:
-                    fecha = "Fecha desconocida"
-                
-                with st.expander(f"📅 {fecha} — Total: ${data.get('total', 0):.2f}"):
-                    for item in data.get('items', []):
-                        st.write(f"- {item.get('nombre', 'Producto')} x {item.get('cantidad', 0):.2f} = **${item.get('subtotal', 0):.2f}**")
-                    
-                    if st.checkbox("Marcar para eliminar esta venta", key=f"chk_del_{v.id}"):
-                        if st.button("❌ Confirmar eliminación de esta venta", key=f"btn_del_{v.id}"):
-                            db.collection("ventas").document(v.id).delete()
-                            st.success("Venta eliminada")
-                            st.rerun()
+            if lista_ventas_procesadas:
+                # Ordenar por fecha (asumiendo que Firestore stream ya viene en orden, pero por las dudas)
+                for v_item in lista_ventas_procesadas:
+                    with st.expander(f"📅 {v_item['fecha_txt']} — Total: ${v_item['total']:.2f}"):
+                        for item in v_item['items']:
+                            st.write(f"- {item.get('nombre', 'Producto')} x {item.get('cantidad', 0):.2f} = **${item.get('subtotal', 0):.2f}**")
                         
-            if not ventas_encontradas:
+                        if st.checkbox("Marcar para eliminar esta venta", key=f"chk_del_{v_item['id']}"):
+                            if st.button("❌ Confirmar eliminación de esta venta", key=f"btn_del_{v_item['id']}"):
+                                db.collection("ventas").document(v_item['id']).delete()
+                                st.success("Venta eliminada")
+                                st.rerun()
+            else:
                 st.info("Aún no hay ventas registradas en el historial.")
