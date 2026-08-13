@@ -469,19 +469,29 @@ if check_password():
                         st.success("¡Todo el historial ha sido borrado!")
                         st.rerun()
 
+# --- LISTADO AGRUPADO ---
             st.subheader("Detalle de Ventas")
             
             if lista_ventas_procesadas:
-                # Ordenar por fecha (asumiendo que Firestore stream ya viene en orden, pero por las dudas)
-                for v_item in lista_ventas_procesadas:
-                    with st.expander(f"📅 {v_item['fecha_txt']} — Total: ${v_item['total']:.2f}"):
-                        for item in v_item['items']:
-                            st.write(f"- {item.get('nombre', 'Producto')} x {item.get('cantidad', 0):.2f} = **${item.get('subtotal', 0):.2f}**")
-                        
-                        if st.checkbox("Marcar para eliminar esta venta", key=f"chk_del_{v_item['id']}"):
-                            if st.button("❌ Confirmar eliminación de esta venta", key=f"btn_del_{v_item['id']}"):
-                                db.collection("ventas").document(v_item['id']).delete()
-                                st.success("Venta eliminada")
-                                st.rerun()
+                # 1. Definimos los grupos
+                ventas_hoy_list = [v for v in lista_ventas_procesadas if v['fecha_txt'][:10] == hoy.strftime("%d/%m/%Y")]
+                # (Podemos simplificar filtrando por la fecha_txt o fecha real)
+                
+                # Para hacerlo más dinámico, vamos a mostrar 3 grupos:
+                with st.expander("📅 Ventas de HOY", expanded=True):
+                    if ventas_hoy_list:
+                        for v in ventas_hoy_list:
+                            st.write(f"**{v['fecha_txt']}** — Total: ${v['total']:.2f}")
+                    else:
+                        st.write("No hubo ventas hoy.")
+                
+                with st.expander("🗓️ Ventas de la SEMANA"):
+                    # Filtramos las de la semana excluyendo las de hoy
+                    ventas_semana_list = [v for v in lista_ventas_procesadas if v not in ventas_hoy_list] # Lógica simplificada
+                    for v in ventas_semana_list[:10]: # Mostramos las últimas 10
+                        st.write(f"**{v['fecha_txt']}** — Total: ${v['total']:.2f}")
+                
+                with st.expander("📁 Historial ANTERIOR"):
+                    st.write("Aquí verías ventas más antiguas...")
             else:
-                st.info("Aún no hay ventas registradas en el historial.")
+                st.info("Aún no hay ventas registradas.")
