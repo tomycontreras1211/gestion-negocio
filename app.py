@@ -439,6 +439,30 @@ if check_password():
 
             st.divider()
 
+            # --- RANKING DE PRODUCTOS MÁS VENDIDOS ---
+            st.subheader("🏆 Top 5 Productos más vendidos")
+            
+            ranking = {}
+            for v in lista_completa:
+                for item in v['items']:
+                    nombre = item.get('nombre', 'Desconocido')
+                    cantidad = float(item.get('cantidad', 0))
+                    ranking[nombre] = ranking.get(nombre, 0) + cantidad
+            
+            if ranking:
+                # Ordenamos el diccionario por cantidad de mayor a menor
+                top_productos = sorted(ranking.items(), key=lambda x: x[1], reverse=True)[:5]
+                
+                # Mostramos el ranking de forma estilizada
+                cols_rank = st.columns(len(top_productos))
+                for i, (prod, cant) in enumerate(top_productos):
+                    # Usamos una columna por producto para que se vea bien en fila
+                    with cols_rank[i]:
+                        st.metric(label=prod[:10] + "..." if len(prod) > 10 else prod, value=f"{cant:.1f}")
+            else:
+                st.info("Aún no hay suficientes datos para el ranking.")
+            
+            st.divider() # Separador antes del Detalle de Ventas
             # --- FILTRO Y LISTADO ---
             st.subheader("Detalle de Ventas")
             filtro_vista = st.selectbox("Filtrar historial por:", ["Todo el historial", "Solo HOY", "Solo esta SEMANA", "Solo este MES"], key="filtro_hist")
