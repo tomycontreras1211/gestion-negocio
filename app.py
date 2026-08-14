@@ -173,10 +173,22 @@ if check_password():
             if filtro_cat != "Todas":
                 lista = [p for p in lista if p.get('categoria') == filtro_cat]
 
-            if lista:
+           if lista:
                 st.write("Despliega cada producto para editar sus datos:")
                 for item in lista:
                     codigo_txt = f" | Código: {item.get('codigo', 'Sin código')}" if item.get('codigo') else ""
+                    
+                    # --- NUEVO: LÓGICA DE ALERTA PARA EL TÍTULO ---
+                    stock_act = float(item.get('stock', 0))
+                    stock_min = float(item.get('stock_minimo', 5.0))
+                    
+                    if stock_act <= 0:
+                        icono_alerta = "🔴 [SIN STOCK]"
+                    elif stock_act <= stock_min:
+                        icono_alerta = "🟡 [STOCK BAJO]"
+                    else:
+                        icono_alerta = "🟢"
+                    # ---------------------------------------------
                     
                     col_min_img, col_min_exp = st.columns([0.15, 0.85])
                     
@@ -191,7 +203,8 @@ if check_password():
                             st.write("📦")
                             
                     with col_min_exp:
-                        titulo_acordeon = f"{item['nombre']} — ${item.get('precio', 0):.2f} | Stock: {item.get('stock', 0)}{codigo_txt} ({item.get('categoria', 'Sin categoría')})"
+                        # Añadimos el icono_alerta al principio del título del expander
+                        titulo_acordeon = f"{icono_alerta} {item['nombre']} — ${item.get('precio', 0):.2f} | Stock: {stock_act}{codigo_txt} ({item.get('categoria', 'Sin categoría')})"
                         
                         with st.expander(titulo_acordeon):
                             if url_img:
