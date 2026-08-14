@@ -444,13 +444,30 @@ if check_password():
                 total_v = float(data.get('total', 0))
                 total_historico += total_v
                 
+                # Manejo seguro de la fecha de Firestore
                 f_obj = data.get('fecha')
-                f_dt = f_obj.to_datetime() if hasattr(f_obj, 'to_datetime') else f_obj
+                if hasattr(f_obj, 'to_datetime'):
+                    f_dt = f_obj.to_datetime()
+                else:
+                    f_dt = f_obj
                 
-                # Acumuladores de métricas
-                if f_dt.strftime("%Y-%m-%d") == hoy_str: ventas_hoy += total_v
-                if f_dt >= inicio_semana: ventas_semana += total_v
-                if f_dt.strftime("%Y-%m") == mes_actual_str: ventas_mes += total_v
+                # CORRECCIÓN: Quitamos la zona horaria (tzinfo) si la tiene para evitar conflictos al comparar
+                if f_dt and hasattr(f_dt, 'tzinfo') and f_dt.tzinfo is not None:
+                    f_dt = f_dt.replace(tzinfo=None)
+                
+                # Si por alguna razón la venta no tiene fecha registrada, usamos la actual para que no rompa la app
+                if not f_dt:
+                    f_dt = hoy
+
+                fecha_str_completa = f_dt.strftime("%d/%m/%Y %H:%M")
+                
+                # Filtros seguros
+                if f_dt.strftime("%Y-%m-%d") == hoy_str: 
+                    ventas_hoy += total_v
+                if f_dt >= inicio_semana: 
+                    ventas_semana += total_v
+                if f_dt.strftime("%Y-%m") == mes_actual_str: 
+                    ventas_mes += total_v
                     
                 lista_completa.append({"id": v.id, "dt": f_dt, "total": total_v, "items": data.get('items', [])})
 
