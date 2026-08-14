@@ -98,6 +98,8 @@ if check_password():
                     cat_nueva = st.selectbox("Categoría", obtener_categorias(), key="cat_prod_nuevo")
                     precio_nuevo = st.number_input("Precio ($)", min_value=0.0, format="%.2f", key="precio_prod_nuevo")
                     stock_nuevo = st.number_input("Stock inicial", min_value=0.0, step=0.5, format="%.2f", key="stock_prod_nuevo")
+                    n_minimo = st.number_input("Alerta de Stock Mínimo", min_value=0.0, value=5.0, step=0.5)
+
                     
                     imagen_nueva = st.text_input("URL de la imagen (Opcional)", key="input_img_nuevo", placeholder="https://ejemplo.com/foto.jpg")
                     if imagen_nueva.strip():
@@ -114,6 +116,7 @@ if check_password():
                                 "categoria": cat_nueva, 
                                 "precio": precio_nuevo, 
                                 "stock": stock_nuevo,
+                                "stock_minimo": n_minimo,
                                 "imagen": imagen_nueva.strip()
                             })
                             st.success("¡Producto guardado!")
@@ -201,6 +204,7 @@ if check_password():
                             codigo_edit = st.text_input("Código de barras", value=item.get('codigo', ''), key=f"cod{item['id']}")
                             precio_edit = st.number_input("Precio / Valor Kilo", value=float(item.get('precio', 0)), key=f"p{item['id']}")
                             stock_edit = st.number_input("Stock", value=float(item.get('stock', 0)), step=0.5, format="%.2f", key=f"s{item['id']}")
+                            minimo_edit = st.number_input("Stock Mínimo de Alerta", value=float(item.get('stock_minimo', 5.0)), step=0.5, key=f"min{item['id']}")
                             
                             imagen_edit = st.text_input("URL de la imagen", value=item.get('imagen', ''), key=f"img{item['id']}")
                             if imagen_edit.strip():
@@ -220,6 +224,7 @@ if check_password():
                                     "codigo": codigo_edit.strip(),
                                     "precio": precio_edit, 
                                     "stock": stock_edit,
+                                    "stock_minimo": minimo_edit,
                                     "categoria": cat_edit,
                                     "imagen": imagen_edit.strip()
                                 })
@@ -345,7 +350,16 @@ if check_password():
                             with c_opc:
                                 st.write(f"**Categoría:** {item.get('categoria', 'General')}")
                                 st.write(f"**Precio base / Kilo:** ${item.get('precio', 0):.2f}")
-                                st.write(f"**Stock disponible:** {item.get('stock', 0)}")
+                                
+                                stock_actual = float(item.get('stock', 0))
+                                stock_minimo = float(item.get('stock_minimo', 5.0))
+
+                                if stock_actual <= 0:
+                                    st.error("❌ ¡SIN STOCK!")
+                                elif stock_actual <= stock_minimo:
+                                    st.warning(f"⚠️ STOCK BAJO: Quedan {stock_actual:.1f} (Mínimo: {stock_minimo})")
+                                else:
+                                    st.success(f"Stock disponible: {stock_actual:.1f}")
 
                                 es_peso = st.checkbox("⚖️ Es por peso / medida", key=f"chk_peso_{pid}")
                                 precio_b = float(item.get('precio', 0))
