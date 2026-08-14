@@ -75,7 +75,7 @@ if check_password():
         # Las empleadas solo tienen acceso a la pestaña de ventas
         tab2 = st.tabs(["💰 Ventas / Caja"])[0]
 
-    # --- TAB 1: PRODUCTOS (Solo Padres) ---
+# --- TAB 1: PRODUCTOS (Solo Padres) ---
     if st.session_state.rol == "padres":
         with tab1:
             st.header("📦 Gestión de Inventario")
@@ -98,8 +98,7 @@ if check_password():
                     cat_nueva = st.selectbox("Categoría", obtener_categorias(), key="cat_prod_nuevo")
                     precio_nuevo = st.number_input("Precio ($)", min_value=0.0, format="%.2f", key="precio_prod_nuevo")
                     stock_nuevo = st.number_input("Stock inicial", min_value=0.0, step=0.5, format="%.2f", key="stock_prod_nuevo")
-                    n_minimo = st.number_input("Alerta de Stock Mínimo", min_value=0.0, value=5.0, step=0.5)
-
+                    minimo_nuevo = st.number_input("Alerta de Stock Mínimo", min_value=0.0, value=5.0, step=0.5, key="min_prod_nuevo")
                     
                     imagen_nueva = st.text_input("URL de la imagen (Opcional)", key="input_img_nuevo", placeholder="https://ejemplo.com/foto.jpg")
                     if imagen_nueva.strip():
@@ -116,7 +115,7 @@ if check_password():
                                 "categoria": cat_nueva, 
                                 "precio": precio_nuevo, 
                                 "stock": stock_nuevo,
-                                "stock_minimo": n_minimo,
+                                "stock_minimo": minimo_nuevo,
                                 "imagen": imagen_nueva.strip()
                             })
                             st.success("¡Producto guardado!")
@@ -173,12 +172,11 @@ if check_password():
             if filtro_cat != "Todas":
                 lista = [p for p in lista if p.get('categoria') == filtro_cat]
 
-           if lista:
+            if lista:
                 st.write("Despliega cada producto para editar sus datos:")
                 for item in lista:
                     codigo_txt = f" | Código: {item.get('codigo', 'Sin código')}" if item.get('codigo') else ""
                     
-                    # --- NUEVO: LÓGICA DE ALERTA PARA EL TÍTULO ---
                     stock_act = float(item.get('stock', 0))
                     stock_min = float(item.get('stock_minimo', 5.0))
                     
@@ -188,7 +186,6 @@ if check_password():
                         icono_alerta = "🟡 [STOCK BAJO]"
                     else:
                         icono_alerta = "🟢"
-                    # ---------------------------------------------
                     
                     col_min_img, col_min_exp = st.columns([0.15, 0.85])
                     
@@ -203,21 +200,20 @@ if check_password():
                             st.write("📦")
                             
                     with col_min_exp:
-                        # Añadimos el icono_alerta al principio del título del expander
                         titulo_acordeon = f"{icono_alerta} {item['nombre']} — ${item.get('precio', 0):.2f} | Stock: {stock_act}{codigo_txt} ({item.get('categoria', 'Sin categoría')})"
                         
                         with st.expander(titulo_acordeon):
                             if url_img:
                                 try:
-                                    st.image(url_img, width=250)
+                                    st.image(url_img, width=250, caption="Vista previa")
                                 except:
                                     st.warning("No se pudo cargar la imagen.")
 
                             nombre_edit = st.text_input("Nombre", value=item['nombre'], key=f"n{item['id']}")
                             codigo_edit = st.text_input("Código de barras", value=item.get('codigo', ''), key=f"cod{item['id']}")
                             precio_edit = st.number_input("Precio / Valor Kilo", value=float(item.get('precio', 0)), key=f"p{item['id']}")
-                            stock_edit = st.number_input("Stock", value=float(item.get('stock', 0)), step=0.5, format="%.2f", key=f"s{item['id']}")
-                            minimo_edit = st.number_input("Stock Mínimo de Alerta", value=float(item.get('stock_minimo', 5.0)), step=0.5, key=f"min{item['id']}")
+                            stock_edit = st.number_input("Stock", value=stock_act, step=0.5, format="%.2f", key=f"s{item['id']}")
+                            minimo_edit = st.number_input("Stock Mínimo de Alerta", value=stock_min, step=0.5, key=f"min{item['id']}")
                             
                             imagen_edit = st.text_input("URL de la imagen", value=item.get('imagen', ''), key=f"img{item['id']}")
                             if imagen_edit.strip():
